@@ -1,0 +1,1208 @@
+#+TODO: TODO | RUN
+* RUN Imports and config
+
+#+begin_src jupyter-python
+from timeit import default_timer as timer
+import pandas as pd
+import numpy as np
+
+import seaborn as sns
+
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn import decomposition
+from sklearn import preprocessing
+from sklearn import metrics
+from sklearn.utils import resample
+
+# for silhouette analysis
+import matplotlib.pyplot as plt
+from sklearn.metrics import silhouette_samples, silhouette_score
+import matplotlib.cm as cm
+#+end_src
+
+#+RESULTS:
+
+Set up seaborn
+#+begin_src jupyter-python :results none
+sns.set(context="notebook",
+  rc={"font.size":12, "font.family":"sans-serif", 
+      "font.serif":"P052", # note: kills the original list font.serif
+      "axes.titlesize":"large", "axes.titlepad":20, 
+      "axes.titleweight":"bold",
+      "axes.labelsize":"medium", "axes.labelpad":10, 
+      "axes.labelweight":"light",  # lighter is not actually an option
+      "xtick.labelsize":"small", "ytick.labelsize":"small", 
+#      "axes.facecolor":"white", # vertical axis padding is werid with this
+      "legend.fontsize": "medium",
+      "xtick.major.width":3, "ytick.major.width":3,
+      "legend.loc":"best",
+      "figure.dpi":200, "figure.titlesize":"large", 
+      "figure.titleweight":"bold"
+  }
+)
+
+context: "notebook"
+#+end_src
+
+
+
+#+begin_src jupyter-python
+df = pd.read_csv("./shot_logs_prepped.csv")
+print(df.columns)
+
+cluster_vars = ["SHOT_CLOCK", 
+                "DRIBBLES", 
+                "TOUCH_TIME", 
+                "SHOT_DIST"]
+#+end_src
+
+#+RESULTS:
+: Index(['GAME_ID', 'W', 'SHOT_CLOCK', 'GAME_CLOCK', 'DRIBBLES', 'TOUCH_TIME',
+:        'SHOT_DIST', 'player_name'],
+:       dtype='object')
+
+* Specify player and build standardized data frame
+** RUN Specify player and define pf = their data frame
+Specify a player and define player frame.
+#+begin_src jupyter-python
+player_name = "stephen curry"
+pf = df[df.player_name == player_name]
+player_name, "Number of shots: {}".format(pf.shape[0])
+#+end_src
+
+#+RESULTS:
+| stephen curry | Number of shots: 909 |
+
+** PCA to compare dribbles and touch time
+Dribbles and touch time are definitely correlated, but we would like
+to understand now strong this effect is.
+
+#+begin_src jupyter-python
+pca = decomposition.PCA()
+pca.fit(pf[["DRIBBLES", "TOUCH_TIME"]])
+pca.get_covariance()
+#+end_src
+
+#+RESULTS:
+: array([[18.16664001, 14.0741078 ],
+:        [14.0741078 , 11.95500068]])
+
+** RUN Standardize pf
+
+#+begin_src jupyter-python
+stzd_cluster_vars = pd.DataFrame(preprocessing.scale(pf[cluster_vars]), 
+                                 columns=cluster_vars, index=pf.index)
+d = dict([[c, stzd_cluster_vars[c]] for c in cluster_vars])
+pf_stzd = pf.assign(**d)
+pf_stzd[cluster_vars].describe()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+|       | SHOT_CLOCK    | DRIBBLES      | TOUCH_TIME    | SHOT_DIST     |
+|-------+---------------+---------------+---------------+---------------|
+| count | 9.090000e+02  | 9.090000e+02  | 9.090000e+02  | 9.090000e+02  |
+| mean  | -3.439371e-16 | 2.345026e-17  | -9.380102e-17 | -4.690051e-17 |
+| std   | 1.000551e+00  | 1.000551e+00  | 1.000551e+00  | 1.000551e+00  |
+| min   | -2.745191e+00 | -8.798527e-01 | -1.139299e+00 | -1.857486e+00 |
+| 25%   | -6.709922e-01 | -8.798527e-01 | -8.499220e-01 | -1.059591e+00 |
+| 50%   | 2.486998e-01  | -1.756090e-01 | -2.711677e-01 | 4.822888e-01  |
+| 75%   | 7.574656e-01  | 5.286347e-01  | 5.390883e-01  | 8.165424e-01  |
+| max   | 1.814133e+00  | 4.519349e+00  | 4.908683e+00  | 2.735805e+00  |
+:END:
+
+* Cluster
+** k-Means
+*** Validclust 
+
+NOTE: I don't trust this package. Also can't control seed?
+
+NOTE: I got a FutureWarning saying calinski_harabaz_score will be
+renamed to calinski_harabasz_score. I fixed this with an easy replace
+in two files in the validclust package.
+
+NOTE: You definitely see the effects of standardization here;
+look at heatmap.
+
+#+begin_src jupyter-python :file cluster_validation_heatmap.png
+from validclust.validclust import ValidClust
+vclust = ValidClust(k=list(range(2, 8)), 
+                    # had to remove 'silhouette' index bc of errors
+                    # modified package to get calinski to work (see above)
+                    indices=['calinski', 'dunn', 'davies'
+],  
+                    methods=['hierarchical', 'kmeans']
+)
+cvi_vals = vclust.fit(pf_stzd[cluster_vars])
+vclust.plot()
+print(vclust._normalize().to_string())
+# print(cvi_vals.to_string())
+# k = vclust._normalize().loc["kmeans","davies"].idxmax(axis=1)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+:                               2         3         4         5         6         7
+: method       index                                                               
+: hierarchical calinski  0.612662  0.777679  0.875136  0.912165  1.000000  0.997465
+:              dunn      1.000000  0.924717  0.439034  0.512959  0.512959  0.512959
+:              davies    1.000000 -0.908907 -0.467309 -0.129870  0.203445  0.496486
+: kmeans       calinski  0.814508  0.805755  0.905987  0.936922  0.982922  1.000000
+:              dunn      0.861402  1.000000  0.772821  0.474064  0.471942  0.580961
+:              davies   -1.905179 -1.211824 -0.140588  0.316396  0.591464  1.000000
+[[file:cluster_validation_heatmap.png]]
+:END:
+
+
+From documentation: Note that, because the scores are normalized along
+each method/index pair, you should compare the colors of the cells in
+the heatmap only within a given row.
+
+*** Davies-Bouldin score
+#+begin_src jupyter-python
+rows = []
+for k in range(2, 8):
+    kmeans = KMeans(n_clusters = k, random_state=1).fit(pf_stzd[cluster_vars])
+    pf_stzd = pf_stzd.assign(CLUSTER=kmeans.labels_)
+    score = metrics.davies_bouldin_score(pf_stzd[cluster_vars], pf_stzd.CLUSTER)
+    rows += [score]
+
+DB_comp = pd.DataFrame(rows, columns = 
+                       ["DB_SCORE"], index=range(2,8))
+DB_comp
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+|     | DB\_SCORE   |
+|-----+-------------|
+| 2   | 1.281614    |
+| 3   | 1.160041    |
+| 4   | 1.020781    |
+| 5   | 0.974391    |
+| 6   | 0.904827    |
+| 7   | 0.863795    |
+:END:
+
+*** Silhouette analysis
+   
+This is derived from the code [[https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html][here]] in the sklearn documentation.
+#+begin_src jupyter-python :file silhouettes.png
+X = pf_stzd[cluster_vars]
+
+range_n_clusters = range(2,8)
+num_ks = len(range_n_clusters)
+
+fig, axs = plt.subplots(nrows=len(range_n_clusters), sharex=True,
+                         figsize=(4,2*num_ks),
+                        gridspec_kw={"hspace":0.1},
+)
+
+
+fig.suptitle("Silhouette Plots for k-Means\nPlayer: {}"
+             .format(player_name.title()), y=0.935, fontsize="large")
+
+for n_clusters in range_n_clusters:
+    ax1 = axs[n_clusters - 2]
+
+    # The (n_clusters+1)*10 is for inserting blank space between silhouette
+    # plots of individual clusters, to demarcate them clearly.
+    ax1.set_ylim([0, len(X) + (n_clusters + 1) * 10])
+
+    # Initialize the clusterer with n_clusters value and a random generator
+    # seed of 10 for reproducibility.
+    clusterer = KMeans(n_clusters=n_clusters, random_state=1)
+    cluster_labels = clusterer.fit_predict(X)
+
+    # The silhouette_score gives the average value for all the samples.
+    # This gives a perspective into the density and separation of the formed
+    # clusters
+    silhouette_avg = silhouette_score(X, cluster_labels)
+    print("For n_clusters =", n_clusters,
+          "The average silhouette_score is :", silhouette_avg)
+
+    # Compute the silhouette scores for each sample
+    sample_silhouette_values = silhouette_samples(X, cluster_labels)
+
+    y_lower = 10
+    colors = cm.get_cmap("Set1").colors
+    for i in range(n_clusters,-1,-1):
+        # Aggregate the silhouette scores for samples belonging to
+        # cluster i, and sort them
+        ith_cluster_silhouette_values = \
+            sample_silhouette_values[cluster_labels == i]
+
+        ith_cluster_silhouette_values.sort()
+
+        size_cluster_i = ith_cluster_silhouette_values.shape[0]
+        y_upper = y_lower + size_cluster_i
+
+        color = colors[i]
+        ax1.fill_betweenx(np.arange(y_lower, y_upper),
+                          0, ith_cluster_silhouette_values,
+                          facecolor=color, edgecolor=color, alpha=1)
+
+        # # Label the silhouette plots with their cluster numbers at the middle
+        # ax1.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+
+        # Compute the new y_lower for next plot
+        y_lower = y_upper + 10  # 10 for the 0 samples
+
+
+   # now set up axes
+#     ax1.set_title("k={}; player: {}".format(n_clusters, player_name.title()))
+#    ax1.set_xlabel("Silhouette coeff. values")
+    ax1.set_ylabel("k = {}".format(n_clusters))
+
+    # The vertical line for average silhouette score of all the values
+    ax1.axvline(x=silhouette_avg, color="red", linestyle="--")
+
+    ax1.set_yticks([])  # Clear the yaxis labels / ticks
+    ax1.set_xticks(np.arange(-0.1,1,0.2))
+#    ax1.set_facecolor("xkcd:lime")
+#    ax1.margins(y=.1)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: For n_clusters = 2 The average silhouette_score is : 0.39153647117350043
+: For n_clusters = 3 The average silhouette_score is : 0.36610534469733913
+: For n_clusters = 4 The average silhouette_score is : 0.33602030682191886
+: For n_clusters = 5 The average silhouette_score is : 0.3296101201101254
+: For n_clusters = 6 The average silhouette_score is : 0.34002165238670157
+: For n_clusters = 7 The average silhouette_score is : 0.3455401692536718
+[[file:silhouettes.png]]
+:END:
+
+Guideline from the authors Kaufman-Rousseeuw on interpretation:
+[[./silhouette-interpretation.png]]
+
+#+RESULTS:
+*** Calinski-Harabasz score
+
+Out of curiosity, I look at how much the C-H score changes depending
+on whether we use the standardized vs the unstandardized data.
+#+begin_src jupyter-python
+rows = []
+for k in range(2,8):
+    kmeans = KMeans(n_clusters = k, random_state=1).fit(pf_stzd[cluster_vars])
+    
+    pf_cl = pf.assign(CLUSTER=kmeans.labels_)
+    score = metrics.calinski_harabasz_score(pf_cl[cluster_vars], pf_cl.CLUSTER)
+
+    pf_stzd = pf_stzd.assign(CLUSTER=kmeans.labels_)
+    score_stzd = metrics.calinski_harabasz_score(pf_stzd[cluster_vars], pf_stzd.CLUSTER)
+
+    rows += [[score, score_stzd]]
+
+CH_comp = pd.DataFrame(rows, columns = 
+                       ["unstandardized", "standardized"], index=range(2,8))
+CH_comp
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+|     | unstandardized   | standardized   |
+|-----+------------------+----------------|
+| 2   | 174.327787       | 429.630845     |
+| 3   | 607.753136       | 424.855431     |
+| 4   | 603.536895       | 477.883420     |
+| 5   | 418.282459       | 494.345875     |
+| 6   | 556.100505       | 517.853275     |
+| 7   | 582.737022       | 526.494016     |
+:END:
+
+#+begin_src jupyter-python
+# k = CH_comp.standardized.idxmax()
+#+end_src
+
+#+RESULTS:
+: 7
+
+*** RUN k-means
+
+Just choosing a k for Curry at the moment.
+#+begin_src jupyter-python
+k = 4
+#+end_src
+
+#+RESULTS:
+
+ Run k-means, attach cluster variables, and separate wins and losses.
+#+begin_src jupyter-python :results none
+clustering = KMeans(n_clusters = k, random_state=1).fit(pf_stzd[cluster_vars])
+#+end_src
+
+#+begin_src jupyter-python
+ pf_cl = pf.assign(CLUSTER=clustering.labels_)
+ pfwins_cl = pf_cl[pf_cl.W=="W"]
+ pflosses_cl = pf_cl[pf_cl.W=="L"]
+
+ print("Number of wins:   {}\nNumber of losses: {}"
+       .format(pfwins_cl.shape[0], pflosses_cl.shape[0]))
+#+end_src
+
+ #+RESULTS:
+ : Number of wins:   710
+ : Number of losses: 199
+
+** DBSCAN
+*** Choose epsilon using Silhouette score
+#+begin_src jupyter-python
+X = pf_stzd[cluster_vars]
+
+idx = pd.Index([], name="eps")
+results = pd.DataFrame([], index=idx, columns=["num. clusters", "score"])
+
+for eps in np.arange(0.05, 0.85, 0.02):
+    db = DBSCAN(eps).fit(X)
+    # count labels, including -1 for "unlabeled"
+    num_clusters = pd.Series(db.labels_).nunique()
+    if num_clusters > 1:
+        pf_cl = pf.assign(CLUSTER=db.labels_)
+        score = metrics.silhouette_score(pf_cl[cluster_vars], 
+                                             pf_cl.CLUSTER)
+        results.loc[eps] = [num_clusters, score]
+
+print(results.sort_values("score", ascending=False).head(10))
+#+end_src
+
+#+RESULTS:
+#+begin_example
+      num. clusters     score
+eps                          
+0.83            3.0  0.315511
+0.81            3.0  0.314904
+0.79            3.0  0.314904
+0.77            3.0  0.313713
+0.75            4.0  0.186831
+0.73            4.0  0.186539
+0.71            4.0  0.183922
+0.69            4.0  0.183922
+0.61            3.0  0.183831
+0.59            3.0  0.181972
+#+end_example
+*** cluster 
+#+begin_src jupyter-python
+eps = results.score.idxmax()
+
+db = DBSCAN(eps).fit(X)
+# count labels, including -1 for "unlabeled"
+num_clusters = pd.Series(db.labels_).nunique()
+if num_clusters > 1:
+    pf_cl = pf.assign(CLUSTER=db.labels_)
+    score = metrics.silhouette_score(pf_cl[cluster_vars], 
+                                         pf_cl.CLUSTER)
+pf_cl
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+|         | GAME\_ID   | W     | SHOT\_CLOCK   | GAME\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   | player\_name    | CLUSTER   |
+|---------+------------+-------+---------------+---------------+------------+---------------+--------------+-----------------+-----------|
+| 14070   | 21400886   | L     | 15.4          | 376           | 0          | 0.5           | 23.2         | stephen curry   | 0         |
+| 14071   | 21400886   | L     | 16.2          | 323           | 11         | 8.3           | 15.6         | stephen curry   | 0         |
+| 14072   | 21400886   | L     | 18.2          | 314           | 0          | 0.8           | 23.1         | stephen curry   | 0         |
+| 14073   | 21400886   | L     | 12.1          | 552           | 0          | 1.5           | 24.6         | stephen curry   | 0         |
+| 14074   | 21400886   | L     | 19.4          | 126           | 4          | 4.6           | 25.7         | stephen curry   | 0         |
+| ...     | ...        | ...   | ...           | ...           | ...        | ...           | ...          | ...             | ...       |
+| 15017   | 21400014   | W     | 19.7          | 361           | 7          | 5.1           | 3.2          | stephen curry   | 0         |
+| 15018   | 21400014   | W     | 3.1           | 210           | 12         | 8.7           | 6.5          | stephen curry   | -1        |
+| 15019   | 21400014   | W     | 3.7           | 135           | 4          | 4.8           | 23.4         | stephen curry   | 0         |
+| 15020   | 21400014   | W     | 3.3           | 93            | 0          | 0.6           | 25.0         | stephen curry   | 0         |
+| 15021   | 21400014   | W     | 12.2          | 34            | 15         | 12.3          | 25.6         | stephen curry   | 0         |
+
+909 rows × 9 columns
+:END:
+
+Separate wins and losses
+#+begin_src jupyter-python
+pfwins_cl = pf_cl[pf_cl.W=="W"]
+pflosses_cl = pf_cl[pf_cl.W=="L"]
+
+print("Number of wins:   {}\nNumber of losses: {}"
+       .format(pfwins_cl.shape[0], pflosses_cl.shape[0]))
+#+end_src
+
+#+RESULTS:
+: Number of wins:   710
+: Number of losses: 199
+** TODO Gaussian mixtures
+** TODO N2D?
+
+* Plot clusters
+** Set up global axis specification functions
+
+#+begin_src jupyter-python
+cluster_var_lims1 = list(map(lambda v: [df[str(v)].min(), df[str(v)].max()], cluster_vars))
+cluster_var_lims2 = cluster_var_lims1.copy()
+cluster_var_lims2.reverse()
+
+cluster_var_lims = list(map(lambda v: [df[str(v)].min(), df[str(v)].max()], cluster_vars))
+cluster_var_lims
+
+# these limits are bad for someone like Anthony Davis
+
+#will add a little padding to make the plots look nicer
+ep = 1
+
+cluster_var_lims = list(map(lambda L: [L[0]-ep, np.round(L[1]+ep,2)], cluster_var_lims))
+cluster_var_lims
+#+end_src
+
+#+RESULTS:
+| -1.0 | 25.0 |
+|   -1 |   33 |
+| -1.0 | 25.9 |
+| -1.0 | 47.7 |
+
+Now we will get x limits and y limits that will worth for every
+possible pairgrid.
+#+begin_src jupyter-python :results none
+import itertools
+prod_lims = list(itertools.product(cluster_var_lims, repeat=2))
+prod_names = list(itertools.product(cluster_vars, repeat=2))
+
+# to agree with the arrangement of plots in the PairGrid, shuld swap each pair
+swap = lambda L: L[::-1]
+prod_lims = list(map(swap, prod_lims))
+prod_names = list(map(swap, prod_names))
+
+# now get 2-d array of tuples of xlims
+xlims = np.empty(len(cluster_vars)**2, dtype=object)
+xlims[:] = [tuple(t[0]) for t in prod_lims]
+xlims = xlims.reshape((len(cluster_vars),len(cluster_vars)))
+
+# now get 2-d array of tuples of ylims
+ylims = np.empty(len(cluster_vars)**2, dtype=object)
+ylims[:] = [tuple(t[1]) for t in prod_lims]
+ylims = ylims.reshape((len(cluster_vars),len(cluster_vars)))
+#+end_src
+
+#+begin_src jupyter-python :results none
+def safe_set_xlim(xlim, ax):
+    if ax is None:
+        pass
+    else:
+        ax.set_xlim(xlim)
+vec_safe_set_xlim = np.vectorize(safe_set_xlim)
+
+def safe_set_ylim(ylim, ax):
+    if ax is None:
+        pass
+    else:
+        ax.set_ylim(ylim)
+vec_safe_set_ylim = np.vectorize(safe_set_ylim)
+#+end_src
+
+** Set up per-player axis specs
+
+#+begin_src jupyter-python
+cluster_var_lims1 = list(map(lambda v: [pf[str(v)].min(), pf[str(v)].max()], cluster_vars))
+cluster_var_lims2 = cluster_var_lims1.copy()
+cluster_var_lims2.reverse()
+
+cluster_var_lims = list(map(lambda v: [pf[str(v)].min(), pf[str(v)].max()], cluster_vars))
+cluster_var_lims
+
+#will add a little padding to make the plots look nicer
+ep = 1
+
+cluster_var_lims = list(map(lambda L: [L[0]-ep, np.round(L[1]+ep,2)], cluster_var_lims))
+cluster_var_lims
+#+end_src
+
+#+RESULTS:
+| -0.30000000000000004 | 25.0 |
+|                   -1 |   24 |
+|                 -1.0 | 21.9 |
+|                 -0.9 | 43.7 |
+
+Now we will get x limits and y limits that will work for every
+possible pairgrid.
+#+begin_src jupyter-python :results none
+import itertools
+prod_lims = list(itertools.product(cluster_var_lims, repeat=2))
+prod_names = list(itertools.product(cluster_vars, repeat=2))
+
+# to agree with the arrangement of plots in the PairGrid, shuld swap each pair
+swap = lambda L: L[::-1]
+prod_lims = list(map(swap, prod_lims))
+prod_names = list(map(swap, prod_names))
+
+# now get 2-d array of tuples of xlims
+xlims = np.empty(len(cluster_vars)**2, dtype=object)
+xlims[:] = [tuple(t[0]) for t in prod_lims]
+xlims = xlims.reshape((len(cluster_vars),len(cluster_vars)))
+
+# now get 2-d array of tuples of ylims
+ylims = np.empty(len(cluster_vars)**2, dtype=object)
+ylims[:] = [tuple(t[1]) for t in prod_lims]
+ylims = ylims.reshape((len(cluster_vars),len(cluster_vars)))
+#+end_src
+
+#+begin_src jupyter-python :results none
+def safe_set_xlim(xlim, ax):
+    if ax is None:
+        pass
+    else:
+        ax.set_xlim(xlim)
+vec_safe_set_xlim = np.vectorize(safe_set_xlim)
+
+def safe_set_ylim(ylim, ax):
+    if ax is None:
+        pass
+    else:
+        ax.set_ylim(ylim)
+vec_safe_set_ylim = np.vectorize(safe_set_ylim)
+#+end_src
+
+** Plot the wins and losses pairplots
+
+
+#+begin_src jupyter-python :file all.png
+plot_df = pf_cl[cluster_vars+["CLUSTER"]]
+
+# note: there is a known issue with KDE estimating bandwidth to 0
+# it can be resolved by manually setting bw, e.g.,, by passing diag_kws={'bw':0.1},
+# but that results in ugly plots sometimes.
+g = sns.pairplot(plot_df, hue="CLUSTER", corner=True, 
+# to resolve KDE failure:
+#diag_kws={'bw':0.6}
+# or else
+# diag_kind="hist", diag_kws={"histtype":"step"}
+)
+vec_safe_set_xlim(xlims, g.axes)
+vec_safe_set_ylim(ylims, g.axes)
+
+g.fig.suptitle("{} All Shots".format(player_name.title()), x=0.7, y=0.985, fontsize="xx-large")
+g._legend.set_bbox_to_anchor((0.9, 0.7))
+#+end_src
+
+#+RESULTS:
+[[file:all.png]]
+
+
+#+begin_src jupyter-python :file w.png
+plot_df = pfwins_cl[cluster_vars+["CLUSTER"]]
+
+# note: there is a known issue with KDE estimating bandwidth to 0
+# it can be resolved by manually setting bw, e.g.,, by passing diag_kws={'bw':0.1},
+# but that results in ugly plots sometimes.
+g = sns.pairplot(plot_df, hue="CLUSTER", corner=True, 
+# to resolve KDE failure:
+#diag_kws={'bw':0.6}
+# or else
+# diag_kind="hist", diag_kws={"histtype":"step"}
+)
+vec_safe_set_xlim(xlims, g.axes)
+vec_safe_set_ylim(ylims, g.axes)
+
+g.fig.suptitle("{} in Wins".format(player_name.title()), x=0.7, y=0.985, fontsize="xx-large")
+g._legend.set_bbox_to_anchor((0.9, 0.7))
+#+end_src
+
+#+RESULTS:
+[[file:w.png]]
+
+#+begin_src jupyter-python :file l.png
+plot_df = pflosses_cl[cluster_vars+["CLUSTER"]]
+# could restrict to only some clusters like this
+# plot_df = plot_df[plot_df.CLUSTER.isin([1,2])]
+
+# note: there is a known issue with KDE estimating bandwidth to 0
+# it can be resolved by manually setting bw, e.g.,, by passing diag_kws={'bw':0.1},
+# but that results in ugly plots sometimes.
+g = sns.pairplot(plot_df, hue="CLUSTER", corner=True, 
+# to resolve KDE failure:
+# diag_kws={'bw':0.6}
+# or else
+# diag_kind="hist", diag_kws={"histtype":"step"}
+)
+vec_safe_set_xlim(xlims, g.axes)
+vec_safe_set_ylim(ylims, g.axes)
+g.axes[0][0].yaxis.set_label_text("butt")
+
+g.fig.suptitle("{} in Losses".format(player_name.title()), x=0.7, y=0.985, fontsize="xx-large")
+g._legend.set_bbox_to_anchor((0.9, 0.7))
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
+:   warnings.warn(msg, UserWarning)
+: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
+:   warnings.warn(msg, UserWarning)
+: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
+:   warnings.warn(msg, UserWarning)
+: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
+:   warnings.warn(msg, UserWarning)
+[[file:l.png]]
+:END:
+
+** Plot just one cluster
+
+#+begin_src jupyter-python :results none
+i = 4
+pf_cl_single = pf_cl[pf_cl.CLUSTER==i]
+#+end_src
+
+
+#+begin_src jupyter-python :file one-cluster-win-or-loss.png
+plot_df = pf_cl_single[cluster_vars+["W"]]
+
+# note: there is a known issue with KDE estimating bandwidth to 0
+# it can be resolved by manually setting bw, e.g.,, by passing diag_kws={'bw':0.1},
+# but that results in ugly plots sometimes.
+g = sns.pairplot(plot_df, hue="W", corner=True, 
+# to resolve KDE failure:
+#diag_kws={'bw':0.6}
+# or else
+#diag_kind="hist", diag_kws={"histtype":"step"}
+)
+vec_safe_set_xlim(xlims, g.axes)
+vec_safe_set_ylim(ylims, g.axes)
+
+g.fig.suptitle("{} cluster {}".format(player_name.title(), i), x=0.7, y=0.985, fontsize="xx-large")
+g._legend.set_bbox_to_anchor((0.9, 0.7))
+#+end_src
+
+#+RESULTS:
+[[file:one-cluster-win-or-loss.png]]
+
+**
+
+* Compare clusters
+** TODO Could do player-by-player outlier analysis here.
+** TODO compare within-cluster mean with bootstrap
+
+NOTE: should I do this on standardized variables? Should it matter?
+
+This is _very_ quick-and-dirty.
+
+#+begin_src jupyter-python
+i=0
+B = 1000
+
+wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+d_test = wins.mean()-losses.mean()
+test_stat = np.inner(d_test, d_test) 
+## ^ need to check this ^
+
+bs_ds = [] # samples of the distance between the means
+for b in range(B):
+    bs_wins = resample(wins)
+    bs_losses = resample(losses)
+    d = bs_wins.mean()-bs_losses.mean()
+    bs_ds += [np.inner(d,d)]
+bs_ds = pd.Series(bs_ds)
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src jupyter-python
+# whether distance between means is zero.
+def loc_bs_cluster(i, B):
+    wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+    losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+    d_test = wins.mean()-losses.mean()
+    test_stat = np.inner(d_test, d_test) 
+    ## ^ need to check this ^
+
+    bs_ds = [] # samples of the distance between the means
+    for b in range(B):
+        bs_wins = resample(wins)
+        bs_losses = resample(losses)
+        d = bs_wins.mean()-bs_losses.mean()
+        bs_ds += [np.inner(d,d)]
+    bs_ds = pd.Series(bs_ds)
+    return test_stat, bs_ds
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src jupyter-python
+from scipy.stats import f as cts_rv
+cts_rv(bs_ds)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+
+TypeErrorTraceback (most recent call last)
+<ipython-input-63-2665b8823450> in <module>
+      1 from scipy.stats import f as cts_rv
+----> 2 cts_rv(bs_ds)
+
+~/anaconda3/lib/python3.7/site-packages/scipy/stats/_distn_infrastructure.py in __call__(self, *args, **kwds)
+    769 
+    770     def __call__(self, *args, **kwds):
+--> 771         return self.freeze(*args, **kwds)
+    772     __call__.__doc__ = freeze.__doc__
+    773 
+
+~/anaconda3/lib/python3.7/site-packages/scipy/stats/_distn_infrastructure.py in freeze(self, *args, **kwds)
+    766 
+    767         """
+--> 768         return rv_frozen(self, *args, **kwds)
+    769 
+    770     def __call__(self, *args, **kwds):
+
+~/anaconda3/lib/python3.7/site-packages/scipy/stats/_distn_infrastructure.py in __init__(self, dist, *args, **kwds)
+    428         self.dist = dist.__class__(**dist._updated_ctor_param())
+    429 
+--> 430         shapes, _, _ = self.dist._parse_args(*args, **kwds)
+    431         self.dist._argcheck(*shapes)
+    432         self.a, self.b = self.dist._get_support(*shapes)
+
+TypeError: _parse_args() missing 1 required positional argument: 'dfd'
+#+end_example
+:END:
+
+#+begin_src jupyter-python
+from statsmodels.distributions.empirical_distribution import ECDF
+
+t0 = timer()
+B = 1000
+for i in range(k):
+    print("Cluster: {}".format(i))
+    
+    test_stat, bs = loc_bs_cluster(i, B)
+    mu = bs.mean()
+    bs_cdf = ECDF(bs)
+
+    if mu < test_stat:
+        pval = 1 - bs_cdf(test_stat)
+    else:
+        pval = bs_cdf(test_stat)
+
+    print("p = {}\n".format(pval))
+print("Time: {}s".format(timer()-t0))
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Cluster: 0
+p = 0.0
+
+Cluster: 1
+p = 0.166
+
+Cluster: 2
+p = 0.37
+
+Cluster: 3
+p = 0.371
+
+Time: 5.807103717001155s
+#+end_example
+
+
+#+begin_src jupyter-python :file mean-diff-bs-sampling-dist.png
+sns.distplot(bs)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.axes._subplots.AxesSubplot at 0x7f81b92666d0>
+[[file:mean-diff-bs-sampling-dist.png]]
+:END:
+
+** TODO compare within-cluster mean with permutations
+
+NOTE: should I do this on standardized variables? Should it matter?
+
+This is _very_ quick-and-dirty.
+
+#+begin_src jupyter-python
+# whether distance between means is zero.
+def cluster_loc_perm(i, num_perms):
+    wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+    losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+    d_test = wins.mean()-losses.mean()
+    test_stat = np.inner(d_test, d_test) 
+    ## ^ need to check this ^
+
+    ds = [] # samples of the distance between the means
+    for n in range(num_perms):
+        both = np.concatenate([wins, losses])
+        both = np.random.permutation(both)
+        vir_wins, vir_losses = np.split(both, [len(wins)])
+        d = vir_wins.mean(axis=0) - vir_losses.mean(axis=0)
+        ds += [np.inner(d,d)]
+    ds = pd.Series(ds)
+    return test_stat, ds
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+from statsmodels.distributions.empirical_distribution import ECDF
+
+t0 = timer()
+N = 1000
+for i in [1]: # range(k):
+    print("Cluster: {}".format(i))
+    
+    test_stat, perm_ds = cluster_loc_perm(i, N)
+    mu = perm_ds.mean()
+    print(f"Test stat:{test_stat}; mu:{mu}")
+    perm_ds_cdf = ECDF(perm_ds)
+
+    if mu < test_stat:
+        pval = 1 - perm_ds_cdf(test_stat)
+    else:
+        pval = perm_ds_cdf(test_stat)
+
+    print("p = {}\n".format(pval))
+print("Time: {}s".format(timer()-t0))
+#+end_src
+
+#+RESULTS:
+: Cluster: 1
+: Test stat:9.313711626370717; mu:13.436022443691373
+: p = 0.47500000000000003
+: 
+: Time: 0.18798091700591613s
+** permutation analysis of Hotelling statistic
+*** Scratch for one cluster
+#+begin_src jupyter-python
+i = 0
+wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+wins.to_csv("./wins.csv", index=False)
+losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+losses.to_csv("./losses.csv", index=False)
+
+both = np.concatenate([wins, losses])
+both.shape
+#+end_src
+
+#+RESULTS:
+| 311 | 4 |
+
+**** using org-babel embedded R
+[[https://cran.r-project.org/web/packages/Hotelling/Hotelling.pdf][Documentation for Hotelling library]].
+
+Did I actually need to run setwd("~/Dropbox/ML/nba-shots/")?
+#+begin_src R :session
+library(Hotelling)
+wins <- read.csv(file="./wins.csv")
+losses <- read.csv(file="./losses.csv")
+
+T2 <- hotelling.stat(wins, losses)
+#+end_src
+
+#+RESULTS:
+| 0.0436613382315166 | 0.247572815533981 |   4 | 231 | 80 | 4 |
+| 0.0436613382315166 | 0.247572815533981 | 306 | 231 | 80 | 4 |
+
+
+Really, the output is a list where the component df is a vector of length 2.
+#+begin_src R :session
+T2$df
+#+end_src
+
+#+RESULTS:
+|   4 |
+| 306 |
+
+This is what we're after.
+
+#+begin_src R :session
+T2$statistic
+#+end_src
+
+#+RESULTS:
+: 0.0436613382315166
+I get the same below using rpy2:
+| 0.043661338231516564 |
+
+**** using rpy2
+#+begin_src jupyter-python
+import rpy2.robjects as ro
+from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+with localconverter(ro.default_converter + pandas2ri.converter):
+  r_wins = ro.conversion.py2ri(wins)
+  r_losses = ro.conversion.py2ri(losses)
+r_losses
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+R/rpy2 DataFrame (80 x 4)
+| SHOT\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   |
+|---------------+------------+---------------+--------------|
+| 18.200000     | 0          | 0.800000      | 23.100000    |
+| 19.400000     | 4          | 4.600000      | 25.700000    |
+| 20.000000     | 3          | 3.200000      | 27.400000    |
+| 18.800000     | 0          | 1.200000      | 23.800000    |
+| ...           | ...        | ...           | ...          |
+| 24.000000     | 2          | 1.300000      | 23.300000    |
+| 20.600000     | 0          | 1.000000      | 25.300000    |
+| 15.400000     | 3          | 2.400000      | 24.700000    |
+| 18.400000     | 6          | 6.300000      | 21.700000    |
+:END:
+
+#+begin_src jupyter-python
+import rpy2.robjects as robjects
+hotelling = importr("Hotelling")
+T2 = robjects.r["hotelling.stat"]
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+r_stat = T2(r_wins, r_losses)
+r_stat
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+ListVector with 6 elements.
+| statistic   | FloatVector with 1 elements.    |
+|             | | 0.043661   |                  |
+| m           | FloatVector with 1 elements.    |
+|             | | 0.247573   |                  |
+| df          | FloatVector with 2 elements.    |
+|             | | 4.000000   | 306.000000   |   |
+| nx          | IntVector with 1 elements.      |
+|             | | 231   |                       |
+| ny          | IntVector with 1 elements.      |
+|             | | 80   |                        |
+| p           | IntVector with 1 elements.      |
+|             | | 4   |                         |
+:END:
+
+#+begin_src jupyter-python
+x = ro.conversion.ri2py(r_stat[0])
+list(x)
+#+end_src
+
+#+RESULTS:
+| 0.043661338231516564 |
+
+*** permutations for one cluster using rpy2
+Now make a function and hope the overhead of converting many times is acceptable.
+
+Set up df's for a single cluster, again.
+
+Set up interactions with R.
+#+begin_src jupyter-python
+from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
+import rpy2.robjects as ro
+
+importr("Hotelling")
+r_T2 = ro.r["hotelling.stat"]
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+# takes in two pandas data frames and produces floating number = T^2 value.
+def T2(wins, losses):
+    with localconverter(ro.default_converter + pandas2ri.converter):
+        r_wins = ro.conversion.py2ri(wins)
+        r_losses = ro.conversion.py2ri(losses)
+        # should find better way to unpack; float() doesn't work
+    T2_val = list(r_T2(r_wins, r_losses)[0])[0]
+    return T2_val
+
+# eg to check against what's above:
+i=0
+wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+T2(wins, losses)
+
+both = np.concatenate([wins, losses])
+both = np.random.permutation(both)
+vir_wins, vir_losses = map(pd.DataFrame, np.split(both, [len(wins)]))
+
+with localconverter(ro.default_converter + pandas2ri.converter):
+    r_wins = ro.conversion.py2ri(wins)
+    r_losses = ro.conversion.py2ri(losses)
+vir_wins
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+|     | 0    | 1   | 2   | 3    |
+|-----+------+-----+-----+------|
+| 0   | 19.4 | 0.0 | 1.7 | 27.8 |
+| 1   | 17.6 | 0.0 | 0.8 | 24.1 |
+| 2   | 18.3 | 6.0 | 6.2 | 24.5 |
+| 3   | 20.0 | 5.0 | 4.1 | 24.3 |
+| 4   | 14.5 | 2.0 | 2.0 | 19.1 |
+| ... | ...  | ... | ... | ...  |
+| 226 | 18.0 | 6.0 | 5.8 | 17.8 |
+| 227 | 21.2 | 0.0 | 0.7 | 25.7 |
+| 228 | 18.3 | 5.0 | 5.7 | 19.5 |
+| 229 | 18.4 | 6.0 | 6.3 | 21.7 |
+| 230 | 17.5 | 2.0 | 2.0 | 24.5 |
+
+231 rows × 4 columns
+:END:
+
+#+begin_src jupyter-python
+def simulate_T2(i, num_perms):
+    wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+    losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
+    test_stat = T2(wins, losses)
+
+    sample = [] # should pool.map this
+    for n in range(num_perms):
+        both = np.concatenate([wins, losses])
+        both = np.random.permutation(both)
+        # T2 needs a pandas df; no numpy arrays allowed
+        vir_wins, vir_losses = map(pd.DataFrame, np.split(both, [len(wins)]))
+        sample += [T2(vir_wins, vir_losses)]
+    sample = pd.Series(sample)
+    return test_stat, sample
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+t0 = timer()
+test_stat, sample = simulate_T2(i, 1000)
+print("Time: {}".format(timer()-t0))
+#+end_src
+
+#+RESULTS:
+: Time: 4.118334772007074
+
+#+begin_src jupyter-python
+test_stat, sample
+#+end_src
+
+#+RESULTS:
+| 0.04366133823151655 | 0 | 0.462838 | 1 | 4.239804 | 2 | 8.146991 | 3 | 8.431266 | 4 | 1.774252 | ... | 995 | 3.030511 | 996 | 4.269614 | 997 | 3.27482 | 998 | 13.344696 | 999 | 1.925045 | Length: | 1000 | dtype: | float64 |
+
+#+begin_src jupyter-python
+from statsmodels.distributions.empirical_distribution import ECDF
+
+t0 = timer()
+num_perms = 1000
+for i in range(k):
+    print("Cluster: {}".format(i))
+    
+    test_stat, sample = simulate_T2(i, num_perms)
+    mu = sample.mean()
+    sample_cdf = ECDF(sample)
+
+    if mu < test_stat:
+        pval = 1 - sample_cdf(test_stat)
+    else:
+        pval = sample_cdf(test_stat)
+
+    print("p = {}\n".format(pval))
+print("Time: {}s".format(timer()-t0))
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Cluster: 0
+p = 0.0
+
+Cluster: 1
+p = 0.357
+
+Cluster: 2
+p = 0.061999999999999944
+
+Cluster: 3
+p = 0.33399999999999996
+
+Time: 15.029873986990424s
+#+end_example
+
+#+begin_src jupyter-python :file sample.png
+sns.distplot(sample)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.axes._subplots.AxesSubplot at 0x7fbd64256fd0>
+[[file:sample.png]]
+:END:
+
+#+begin_src jupyter-python :file sample.png
+test_stat
+#+end_src
+
+#+RESULTS:
+: 0.043661338231516564
+
+#+begin_src R :session
+require(Hmisc)
+require(binom)
+#+end_src
+
+#+RESULTS:
+: TRUE
+
+#+begin_src R :session
+set.seed(0)
+p <- runif(1,0,1)
+X <- sample(c(0,1), size = 100, replace = TRUE, prob = c(1-p, p))
+library(Hmisc)
+binconf(sum(X), length(X), alpha = 0.05, method = 'exact')
+## library(binom)
+## binom.confint(sum(X), length(X), conf.level = 0.95, method = 'all')
+#+end_src
+
+#+RESULTS:
+| 0.93 | 0.861080271544143 | 0.971394711092561 |
+
+#+begin_src R :session
+length(X)
+#+end_src
+
+#+RESULTS:
+: 100
+
+** 1-dimensional t-test in each coordinate
+
+#+begin_src jupyter-python
+from scipy.stats import ttest_ind
+#+end_src
+
+#+RESULTS:
+
+#+begin_src jupyter-python
+cl_labels = pf_cl.CLUSTER.unique()
+cl_labels.sort()
+for cl in cl_labels:
+    print("cluster: {}".format(cl))
+    for var in cluster_vars:
+        wf = pfwins_cl[pfwins_cl.CLUSTER==cl]
+        lf = pflosses_cl[pflosses_cl.CLUSTER==cl]
+        w = wf[var]
+        l = lf[var]
+        p = ttest_ind(w,l, equal_var=False).pvalue
+        if p < 0.05/len(cluster_vars):  # <- Bonferroni correction
+            print("Var: {}; p={}".format(var, p))
+#+end_src
+
+#+RESULTS:
+: cluster: 0
+: cluster: 1
+: cluster: 2
+: Var: DRIBBLES; p=0.0061715962024508865
+: Var: TOUCH_TIME; p=0.0025996451321545237
+: cluster: 3
+
