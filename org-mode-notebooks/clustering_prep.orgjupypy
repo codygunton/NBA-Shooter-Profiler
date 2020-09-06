@@ -1,54 +1,34 @@
 #+TODO: TODO | RUN
-* RUN Imports and config
+* RUN Imports
 
 See eda.orgjupypy for more basic descriptions the data.
-
 #+begin_src jupyter-python
 import pandas as pd
 import numpy as np
 
-DF = pd.read_csv("./shot_logs.csv")
-DF.columns
+df = pd.read_csv("../data/shot_logs.csv")
 #+end_src
 
 #+RESULTS:
-: Index(['GAME_ID', 'MATCHUP', 'LOCATION', 'W', 'FINAL_MARGIN', 'SHOT_NUMBER',
-:        'PERIOD', 'GAME_CLOCK', 'SHOT_CLOCK', 'DRIBBLES', 'TOUCH_TIME',
-:        'SHOT_DIST', 'PTS_TYPE', 'SHOT_RESULT', 'CLOSEST_DEFENDER',
-:        'CLOSEST_DEFENDER_PLAYER_ID', 'CLOSE_DEF_DIST', 'FGM', 'PTS',
-:        'player_name', 'player_id'],
-:       dtype='object')
 
 * Clean data
 ** RUN Restrict vars and inspect
 
-We will try understand how a shooter's shot selection, described in
-terms of a restricted set of variables, is a good predictor of a win
-or loss for the team. We expect that this can only be the case for
-players that are one of the most important players on their team.
-
+We will try understand how a shooter's shot selection, described in terms of a restricted set of variables, is a good predictor of a win or loss for the team. We expect that this can only be the case for players that are one of the most important players on their team.
 #+begin_src jupyter-python :results none
-keep_vars = ["GAME_ID", "W", "SHOT_CLOCK", "GAME_CLOCK", "DRIBBLES", "TOUCH_TIME", "SHOT_DIST", "player_name"]
+keep_vars = ["GAME_ID", "W", "SHOT_CLOCK", 
+             "GAME_CLOCK", "DRIBBLES", "TOUCH_TIME", 
+             "SHOT_DIST", "player_name"]
 cluster_vars = ["SHOT_CLOCK", 
                 "DRIBBLES", 
                 "TOUCH_TIME", 
                 "SHOT_DIST"]
-df = DF[keep_vars]
+df = df[keep_vars]
 #+end_src
 
-NOTE: DRIBBLES and TOUCH_TIME are highly correlated 'in the large',
-but for a particular player it can be useful to separate them.
-
-We know from looking at Harden's data in the eda file that there are
-NaN's in the SHOT_CLOCK column. These come both from the clock being
-turned off at the time of the shot (this is resolvable by using the
-game clock at the time) and from the values simply being missing (I
-have often seen shot clocks malfunction while watching a game, believe
-it or now.) We quickly check to see if other variables are missing
-values:
-
+We check to see which columns contain a missing value.
 #+begin_src jupyter-python
-df.isna().any()
+print(df.isna().any())
 #+end_src
 
 #+RESULTS:
@@ -62,151 +42,166 @@ df.isna().any()
 : player_name    False
 : dtype: bool
 
+There are missing values of SHOT_CLOCK, and not of any other variable. These come both from the clock being turned off at the time of the shot (this is resolvable by using the game clock at the time) and from the values simply being missing (I have often seen shot clocks malfunction while watching a game).
 
-We we'll more closely at the ranges of some relevant variables
-
+How prevalent is this problem?
 #+begin_src jupyter-python
-print("Wins/losses")
-print(df.W.value_counts())
-print()
-print(df.describe())
+df_na = df[df.SHOT_CLOCK.isna()] # frame of rows from df with missing SHOT_CLOCK value
+num_na = df_na.shape[0]
+print(f"There are {num_na} rows out of 128069", 
+      f"({np.round(100*num_na/df.shape[0], 1)}%)", 
+      "with a missing value of SHOT_CLOCK.")
 #+end_src
 
 #+RESULTS:
-#+begin_example
-Wins/losses
-W    64595
-L    63474
-Name: W, dtype: int64
+: There are 5567 rows out of 128069 (4.3%) with a missing value of SHOT_CLOCK.
 
-            GAME_ID     SHOT_CLOCK       DRIBBLES     TOUCH_TIME  \
-count  1.280690e+05  122502.000000  128069.000000  128069.000000   
-mean   2.140045e+07      12.453344       2.023355       2.765901   
-std    2.578773e+02       5.763265       3.477760       3.043682   
-min    2.140000e+07       0.000000       0.000000    -163.600000   
-25%    2.140023e+07       8.200000       0.000000       0.900000   
-50%    2.140045e+07      12.300000       1.000000       1.600000   
-75%    2.140067e+07      16.675000       2.000000       3.700000   
-max    2.140091e+07      24.000000      32.000000      24.900000   
 
-           SHOT_DIST  
-count  128069.000000  
-mean       13.571504  
-std         8.888964  
-min         0.000000  
-25%         4.700000  
-50%        13.700000  
-75%        22.500000  
-max        47.200000  
-#+end_example
+Here is a basic description of the variables we intend to use for clustering:
+#+begin_src jupyter-python
+print(df[cluster_vars].describe())
+#+end_src
+
+#+RESULTS:
+:           SHOT_CLOCK       DRIBBLES     TOUCH_TIME      SHOT_DIST
+: count  122502.000000  128069.000000  128069.000000  128069.000000
+: mean       12.453344       2.023355       2.765901      13.571504
+: std         5.763265       3.477760       3.043682       8.888964
+: min         0.000000       0.000000    -163.600000       0.000000
+: 25%         8.200000       0.000000       0.900000       4.700000
+: 50%        12.300000       1.000000       1.600000      13.700000
+: 75%        16.675000       2.000000       3.700000      22.500000
+: max        24.000000      32.000000      24.900000      47.200000
+
+Everything seems to be in order except for some missing SHOT_CLOCK values and the existence of some negative values of TOUCH_TIME. How many such values exist?
+#+begin_src jupyter-python
+df_neg = df[df.TOUCH_TIME<0]
+print("The number of negative negative TOUCH_TIME",
+      f"values is {df_neg.shape[0]}.")
+df_neg.nunique()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: The number of negative negative TOUCH_TIME values is 312.
+: GAME_ID        249
+: W                2
+: SHOT_CLOCK     148
+: GAME_CLOCK     257
+: DRIBBLES         2
+: TOUCH_TIME      72
+: SHOT_DIST      164
+: player_name    163
+: dtype: int64
+:END:
+
+We see that the problem of negative touch times is prevalent: it occurs in 249/904 games, in a variety of SHOT_CLOCK/GAME_CLOCK settings. However, it only occurs for two values of DRIBBLES:
+#+begin_src jupyter-python
+df_neg.DRIBBLES.value_counts()
+#+end_src
+
+#+RESULTS:
+: 0    311
+: 2      1
+: Name: DRIBBLES, dtype: int64
 
 ** Missing shot clock values
 *** RUN Replace GAME_CLOCK column
-What does GAME_CLOCK look like when SHOT_CLOCK is nan? There are 5567
-rows out of 128069 (4.3%) fitting this condition.
-#+begin_src jupyter-python
-dfm = df[df.SHOT_CLOCK.isna()] # frame of rows from df with missing SHOT_CLOCK value
-print(dfm.shape)
-#+end_src
-
-#+RESULTS:
-: (5567, 8)
-
+What does GAME_CLOCK look like when SHOT_CLOCK is nan? Values of the variable GAME_CLOCK are times in the form mm:ss. We convert those times to seconds.
 #+begin_src jupyter-python :results none
 def mmss_to_sec(s):  # is a series who entires are strings of times of the form "mm:ss"
     ddf = s.str.split(":", expand=True)
     ddf = ddf.astype(int)
     return ddf[0]*60 + ddf[1]
-#+end_src
-
-#+begin_src jupyter-python
 df = df.assign(GAME_CLOCK=mmss_to_sec(df.GAME_CLOCK))
-dfm = dfm.assign(GAME_CLOCK=mmss_to_sec(dfm.GAME_CLOCK))
+df_na = df_na.assign(GAME_CLOCK=mmss_to_sec(df_na.GAME_CLOCK))
 #+end_src
 
-#+RESULTS:
 
-I consider those with GAME_CLOCK <= 24 to be uncontroversial. I'll
-fill those by using the game clock value. The rest are controversial:
+I treat those missing values with GAME_CLOCK <= 24 as uncontroversial with regard to how they should be imputed. In such cases, the shot clock is turned off. I'll fill those by using the game clock value. The remaining values are controversial:
 #+begin_src jupyter-python
-contro = dfm[dfm.GAME_CLOCK>24]
-contro
+contro = df_na[df_na.GAME_CLOCK>24]
+print(f"There are {contro.shape[0]} controversial rows.")
+contro.nunique()
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-|          | GAME\_ID   | W     | SHOT\_CLOCK   | GAME\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   | player\_name       |
-|----------+------------+-------+---------------+---------------+------------+---------------+--------------+--------------------|
-| 4503     | 21400761   | L     | NaN           | 30            | 0          | 0.8           | 14.9         | jason maxiell      |
-| 8704     | 21400868   | W     | NaN           | 660           | 0          | 0.4           | 7.4          | carlos boozer      |
-| 8705     | 21400868   | W     | NaN           | 553           | 3          | 4.0           | 13.5         | carlos boozer      |
-| 8706     | 21400868   | W     | NaN           | 272           | 0          | 0.9           | 2.3          | carlos boozer      |
-| 8707     | 21400868   | W     | NaN           | 223           | 0          | 1.0           | 16.3         | carlos boozer      |
-| ...      | ...        | ...   | ...           | ...           | ...        | ...           | ...          | ...                |
-| 127112   | 21400815   | W     | NaN           | 383           | 2          | 1.9           | 5.4          | bojan bogdanovic   |
-| 127113   | 21400815   | W     | NaN           | 365           | 0          | 0.4           | 2.3          | bojan bogdanovic   |
-| 127114   | 21400815   | W     | NaN           | 252           | 0          | 1.5           | 25.1         | bojan bogdanovic   |
-| 127115   | 21400815   | W     | NaN           | 642           | 0          | 0.8           | 24.5         | bojan bogdanovic   |
-| 127116   | 21400815   | W     | NaN           | 403           | 0          | 1.0           | 25.2         | bojan bogdanovic   |
-
-2013 rows × 8 columns
+: There are 2013 controversial rows.
+: GAME_ID         35
+: W                2
+: SHOT_CLOCK       0
+: GAME_CLOCK     655
+: DRIBBLES        25
+: TOUCH_TIME     139
+: SHOT_DIST      285
+: player_name    175
+: dtype: int64
 :END:
 
 *** Analysis of controversial shots
-
-The thereare 35 games, out of 904 total (3.9%), with a controverial row.
+How many controversial shots are there in each game?
 #+begin_src jupyter-python
-contro.GAME_ID.nunique()/df.GAME_ID.nunique()
+vcs = pd.DataFrame(contro.GAME_ID.value_counts())
+vcs = vcs.rename(columns={"GAME_ID":"# missing"})
+vcs.index.name = "GAME_ID"
+print(vcs)
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-# [goto error]
-: 
-: NameErrorTraceback (most recent call last)
-: <ipython-input-8-8ff0f031c53c> in <module>
-: ----> 1 contro.GAME_ID.nunique()/df.GAME_ID.nunique()
-: 
-: NameError: name 'contro' is not defined
-:END:
+#+begin_example
+          # missing
+GAME_ID            
+21400339        169
+21400579        149
+21400115        141
+21400616        138
+21400648        135
+21400032        133
+21400084        129
+21400675        121
+21400088        118
+21400300         84
+21400494         72
+21400562         72
+21400815         71
+21400787         69
+21400667         69
+21400548         68
+21400680         68
+21400868         62
+21400538         40
+21400449         31
+21400169         18
+21400692         12
+21400813         10
+21400814         10
+21400741          6
+21400086          5
+21400907          5
+21400159          1
+21400344          1
+21400400          1
+21400625          1
+21400066          1
+21400761          1
+21400031          1
+21400001          1
+#+end_example
 
-How many convtroversial shots are there in each game?
 
+In the worst case, Game 21400339, almost all of the shots have a missing SHOT_CLOCK value:
 #+begin_src jupyter-python
-contro.GAME_ID.value_counts()
+bad_ID = 21400339
+num_total = df[df.GAME_ID==bad_ID].shape[0]
+num_missing = contro[contro.GAME_ID==bad_ID].shape[0]
+print(f"In game {bad_ID}, {num_missing} shots", 
+      f"out of {num_total} have a missing value",
+      "of SHOT_CLOCK.")
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-# [goto error]
-: 
-: NameErrorTraceback (most recent call last)
-: <ipython-input-9-8f86881c496a> in <module>
-: ----> 1 contro.GAME_ID.value_counts()
-: 
-: NameError: name 'contro' is not defined
-:END:
-
-
-In the worst case, almost all (all but 10 of them) of the shots are
-missing a SHOT_CLOCK value.
-
-#+begin_src jupyter-python
-contro[contro.GAME_ID == 21400339]
-# df[df.GAME_ID == 21400339]
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-# [goto error]
-: 
-: NameErrorTraceback (most recent call last)
-: <ipython-input-10-42043ef32257> in <module>
-: ----> 1 contro[contro.GAME_ID == 21400339]
-:       2 # df[df.GAME_ID == 21400339]
-: 
-: NameError: name 'contro' is not defined
-:END:
+: In game 21400339, 169 shots out of 179 have a missing value of SHOT_CLOCK.
 
 What about a game with only a few controversial rows?
 #+begin_src jupyter-python
@@ -215,156 +210,112 @@ contro[contro.GAME_ID == 21400741]
 
 #+RESULTS:
 :RESULTS:
-# [goto error]
-: 
-: NameErrorTraceback (most recent call last)
-: <ipython-input-11-872bd52e235e> in <module>
-: ----> 1 contro[contro.GAME_ID == 21400741]
-: 
-: NameError: name 'contro' is not defined
+|       | GAME_ID  | W | SHOT_CLOCK | GAME_CLOCK | DRIBBLES | TOUCH_TIME | SHOT_DIST | player_name        |
+|-------+----------+---+------------+------------+----------+------------+-----------+--------------------|
+| 13859 | 21400741 | W | NaN        | 594        | 2        | 2.1        | 6.8       | leandro barbosa    |
+| 16053 | 21400741 | W | NaN        | 593        | 0        | 0.0        | 3.2       | marreese speights  |
+| 16056 | 21400741 | W | NaN        | 373        | 0        | 0.0        | 2.6       | marreese speights  |
+| 17067 | 21400741 | W | NaN        | 458        | 0        | 1.1        | 24.2      | andre iguodala     |
+| 37940 | 21400741 | L | NaN        | 570        | 0        | 0.8        | 25.5      | charlie villanueva |
+| 38437 | 21400741 | L | NaN        | 383        | 1        | 2.9        | 2.2       | chandler parsons   |
 :END:
 
 
-Among these, we see that some have short touch time and almost no
-touch time, or few dribbles, or short distance. This suggests that
-some were shot before the shot clock reset.
+Among these, we see that some have short touch time, or few dribbles, or short distance. This suggests that some were shot before the shot clock reset.
+#+begin_src jupyter-python
+num_contro = contro.shape[0]
+num_short = contro[(contro.TOUCH_TIME<4)].shape[0]
+print(f"{num_short} out of {num_contro} outstanding",
+      f"shots have a touch time of <4 seconds.")
+#+end_src
+
+#+RESULTS:
+: 1591 out of 2013 outstanding shots have a touch time of <4 seconds.
+
+We conclude ~75% of the controversial values have a short touch time, suggesting a missed shot clock reset.
+
+*** Less conservative policy: 
+- Drop those games with > _10? 20?_ contraversial rows. For the rest: 
+  - If GAME_CLOCK =< 24: fill SHOT_CLOCK using GAME_CLOCK;
+  - If DRIBBLES < _5?_: assume the clock didn't reset, 
+    and set SHOT_CLOCK = 24 - TOUCH_TIME.
+Note: the last part of this is a bad polciy in more recent seasons, when the shot clock would only reset to 14 after an offensive rebound.
+*** Most conservative policy
+- Drop all 35 games with a controversial value.
+
+The benefit of this policy is that it would allows us to conduct a game-by-game analysis for each player. We don't do this in our shot profiling application, so we opt not to use this policy since it would drop a large number of useful datapoints:
+#+begin_src jupyter-python
+num_shots = sum(df.GAME_ID.isin(contro.GAME_ID.unique()))
+print(f"This policy would drop {num_shots} shots.")
+#+end_src
+
+#+RESULTS:
+: This policy would drop 5110 shots.
+*** RUN Our policy:
+ We will follow this policy for resolving missing SHOT_CLOCK values:
+ - Drop controversial rows.
+ - For the remaining rows, GAME_CLOCK =< 24. For these, fill SHOT_CLOCK using GAME_CLOCK.
+
+ #+begin_src jupyter-python
+ df = df.drop(contro.index)
+ GC_vals = df[df.SHOT_CLOCK.isna()].GAME_CLOCK.unique()
+ print("For the remaining missing values," 
+       f"the game clock is <= {GC_vals.max()}")
+ #+end_src
+
+ #+RESULTS:
+ : For the remaining missing values,the game clock is <= 24
+
+ We now fill the remaining missing values with 0:
+ #+begin_src jupyter-python
+ new_SHOT_CLOCK = df.SHOT_CLOCK.fillna(df.GAME_CLOCK)
+ df = df.assign(SHOT_CLOCK = new_SHOT_CLOCK)
+ #+end_src
+
+ #+RESULTS:
+
+ We check each column to verify that there are no missing values:
+ #+begin_src jupyter-python
+ print(df.isna().any())
+ #+end_src
+
+ #+RESULTS:
+ : GAME_ID        False
+ : W              False
+ : SHOT_CLOCK     False
+ : GAME_CLOCK     False
+ : DRIBBLES       False
+ : TOUCH_TIME     False
+ : SHOT_DIST      False
+ : player_name    False
+ : dtype: bool
+
+** RUN Clip touch times
 
 #+begin_src jupyter-python
-contro[(contro.TOUCH_TIME>4)]
+print(f"There are {sum(df.TOUCH_TIME==0)} shots with TOUCH_TIME==0.")
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-# [goto error]
-: 
-: NameErrorTraceback (most recent call last)
-: <ipython-input-12-f28ccf998cbb> in <module>
-: ----> 1 contro[(contro.TOUCH_TIME>4)]
-: 
-: NameError: name 'contro' is not defined
-:END:
+: There are 2985 shots with TOUCH_TIME==0.
 
-We conclude ~75% of the controversial values have a short touch time, suggesting a missed reset.
-
-** RUN Clip or drop nonsense touch times
-
+We saw before that all but one of the shots with negative touch time was preceded by zero dribbles (like a catch-and-shoot or tip-in situation). Since TOUCH_TIME==0 occurs naturally in the dataset, it is natural to clip negative touch times from below to 0 whenever those shots were preceded by zero dribbles. This leaves only one outstanding row:
 #+begin_src jupyter-python
-df[(df.TOUCH_TIME<0)].DRIBBLES.value_counts()
-df[(df.TOUCH_TIME<0)&(df.DRIBBLES==2)]
+df[(df.TOUCH_TIME<0)&(df.DRIBBLES>0)].iloc[0]
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-|         | GAME\_ID   | W   | SHOT\_CLOCK   | GAME\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   | player\_name   |
-|---------+------------+-----+---------------+---------------+------------+---------------+--------------+----------------|
-| 44723   | 21400821   | W   | 23.0          | 337           | 2          | -0.1          | 24.2         | kyrie irving   |
-:END:
+: GAME_ID            21400821
+: W                         W
+: SHOT_CLOCK               23
+: GAME_CLOCK              337
+: DRIBBLES                  2
+: TOUCH_TIME             -0.1
+: SHOT_DIST              24.2
+: player_name    kyrie irving
+: Name: 44723, dtype: object
 
-All but one of the shots with negative touchtime was preceded by zero
-dribbles (like a catch-and-shoot or tip-in situation).  The one shot
-with two driibles looks like a touch time of 1 second--the shot clock
-was at 23. Hence we can reasonably set all of these touch times to
-zero, or possibly set the exceptional shot's touch time to 1s.
-
-** Less conservative drop policy: 
-
-Resolve negative touch times by setting to 0 or 1.
-Drop those game with > _10? 20?_ contraversial rows. For the rest: 
-  - if GAME_CLOCK =<24: SHOT_CLOCK with GAME_CLOCK
-  - if DRIBBLES < 5: assume the clock didn't reset, 
-    and set SHOT_CLOCK = 24 - TOUCH_TIME 
-Note: the last part of this is a bad policy in more recent seasons, 
-when the shot clock would only reset to 14 after an offensive rebound.
-
-** More conservative and easier drop policy:
-Resolve negative touch times by setting to 0 or 1.
-Fill uncontroversial missing values. For the rest, resolve using 24 -
-touch time as above, and drop any values with long touch time or many
-dribbles. That's only two or three drops in this case.
-#+begin_src jupyter-python :eval no
-few_contro = contro.GAME_ID.value_counts()[(contro.GAME_ID.value_counts()<10)].index
-contro[contro.GAME_ID.isin(few_contro)]
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-|          | GAME\_ID   | W   | SHOT\_CLOCK   | GAME\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   | player\_name              |
-|----------+------------+-----+---------------+---------------+------------+---------------+--------------+---------------------------|
-| 4503     | 21400761   | L   | NaN           | 30            | 0          | 0.8           | 14.9         | jason maxiell             |
-| 13859    | 21400741   | W   | NaN           | 594           | 2          | 2.1           | 6.8          | leandro barbosa           |
-| 14058    | 21400907   | W   | NaN           | 213           | 1          | 1.4           | 29.3         | stephen curry             |
-| 15024    | 21400907   | W   | NaN           | 515           | 0          | 0.6           | 24.7         | klay thompson             |
-| 16053    | 21400741   | W   | NaN           | 593           | 0          | 0.0           | 3.2          | marreese speights         |
-| 16056    | 21400741   | W   | NaN           | 373           | 0          | 0.0           | 2.6          | marreese speights         |
-| 17067    | 21400741   | W   | NaN           | 458           | 0          | 1.1           | 24.2         | andre iguodala            |
-| 17338    | 21400907   | W   | NaN           | 501           | 0          | 1.2           | 2.6          | draymond green            |
-| 26334    | 21400031   | W   | NaN           | 308           | 0          | 0.8           | 16.0         | nene hilario              |
-| 30577    | 21400001   | W   | NaN           | 228           | 0          | 0.2           | 1.6          | anthony davis             |
-| 37940    | 21400741   | L   | NaN           | 570           | 0          | 0.8           | 25.5         | charlie villanueva        |
-| 38437    | 21400741   | L   | NaN           | 383           | 1          | 2.9           | 2.2          | chandler parsons          |
-| 46737    | 21400066   | L   | NaN           | 705           | 0          | 0.0           | 5.7          | lebron james              |
-| 54606    | 21400086   | W   | NaN           | 111           | 2          | 1.3           | 16.3         | evan turner               |
-| 54607    | 21400086   | W   | NaN           | 88            | 4          | 10.0          | 17.1         | evan turner               |
-| 55235    | 21400086   | W   | NaN           | 170           | 0          | 7.2           | 6.2          | jared sullinger           |
-| 58710    | 21400159   | W   | NaN           | 351           | 1          | 1.6           | 0.9          | kawhi leonard             |
-| 72238    | 21400907   | L   | NaN           | 219           | 0          | 1.0           | 1.9          | michael carter-williams   |
-| 77687    | 21400907   | L   | NaN           | 534           | 0          | 0.6           | 2.8          | giannis antetokounmpo     |
-| 83083    | 21400400   | L   | NaN           | 332           | 0          | 2.8           | 17.7         | jason smith               |
-| 96864    | 21400625   | L   | NaN           | 313           | 0          | 0.7           | 22.6         | james ennis               |
-| 108799   | 21400344   | L   | NaN           | 204           | 3          | 3.8           | 16.0         | chris paul                |
-| 115352   | 21400086   | L   | NaN           | 147           | 0          | 0.2           | 30.1         | aaron brooks              |
-| 115353   | 21400086   | L   | NaN           | 137           | 0          | 0.9           | 26.6         | aaron brooks              |
-:END:
-
-** RUN Most conservative drop policy
-Resolve negative touch times by setting to 0 or 1.
-Just drop all games with a controversial value.
-
-#+begin_src jupyter-python
-shots_from_contro_games = df[df.GAME_ID.isin(contro.GAME_ID.unique())]
-df = df.drop(shots_from_contro_games.index)
-#+end_src
-
-#+RESULTS:
-
-
-#+begin_src jupyter-python
-df[df.SHOT_CLOCK.isna()].GAME_CLOCK.unique()
-#+end_src
-
-#+RESULTS:
-: array([ 0,  4,  1,  2,  3, 13,  6,  8, 17,  7, 23, 12, 10,  9, 11,  5, 16,
-:        20, 18, 21, 14, 19, 15, 22, 24])
-
-** RUN Filling uncontroversial NaN's
-
-#+begin_src jupyter-python
-new_SHOT_CLOCK = df.SHOT_CLOCK.fillna(df.GAME_CLOCK)
-df = df.assign(SHOT_CLOCK = new_SHOT_CLOCK); df
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-|          | GAME\_ID   | W     | SHOT\_CLOCK   | GAME\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   | player\_name    |
-|----------+------------+-------+---------------+---------------+------------+---------------+--------------+-----------------|
-| 0        | 21400899   | W     | 10.8          | 69            | 2          | 1.9           | 7.7          | brian roberts   |
-| 1        | 21400899   | W     | 3.4           | 14            | 0          | 0.8           | 28.2         | brian roberts   |
-| 2        | 21400899   | W     | 0.0           | 0             | 3          | 2.7           | 10.1         | brian roberts   |
-| 3        | 21400899   | W     | 10.3          | 707           | 2          | 1.9           | 17.2         | brian roberts   |
-| 4        | 21400899   | W     | 10.9          | 634           | 2          | 2.7           | 3.7          | brian roberts   |
-| ...      | ...        | ...   | ...           | ...           | ...        | ...           | ...          | ...             |
-| 128064   | 21400006   | L     | 18.3          | 112           | 5          | 6.2           | 8.7          | jarrett jack    |
-| 128065   | 21400006   | L     | 19.8          | 688           | 4          | 5.2           | 0.6          | jarrett jack    |
-| 128066   | 21400006   | L     | 23.0          | 670           | 2          | 4.2           | 16.9         | jarrett jack    |
-| 128067   | 21400006   | L     | 9.1           | 157           | 4          | 4.5           | 18.3         | jarrett jack    |
-| 128068   | 21400006   | L     | 12.0          | 12            | 5          | 4.7           | 5.1          | jarrett jack    |
-
-122959 rows × 8 columns
-:END:
-
-** RUN Resolving negative touch times
-
-I'll set them all to 0.
+The one shot with two dribbles looks like a touch time of 1 second--the shot clock was at 23. Hence we can reasonably set all of these touch times to zero, or possibly set the exceptional shot's touch time to 1 second. I'll just set them all to 0:
 #+begin_src jupyter-python
 masked_TOUCH_TIME = df.TOUCH_TIME.mask(df.TOUCH_TIME<0, 0)
 df = df.assign(TOUCH_TIME=masked_TOUCH_TIME)
@@ -375,10 +326,24 @@ df = df.assign(TOUCH_TIME=masked_TOUCH_TIME)
 * output data frame
 
 #+begin_src jupyter-python
-df.to_csv("shot_logs_prepped.csv", index=False)
+print(f"Exporting a dataframe of shape {df.shape} to csv.")
+df.to_csv("../data/shot_logs_prepped.csv", index=False)
 #+end_src
 
 #+RESULTS:
+: Exporting a dataframe of shape (126056, 8) to csv.
 
-* TODO Summary of cleaning
+* Summary of cleaning
 
+- We kept the variables:
+    ["GAME_ID", "W", "SHOT_CLOCK", 
+     "GAME_CLOCK", "DRIBBLES", "TOUCH_TIME", 
+     "SHOT_DIST", "player_name"]
+
+- We converted GAME_CLOCK from strings to ints (unit: seconds).
+
+- We filled handled missing SHOT_CLOCK values by:
+  - Replacing SHOT_CLOCK by GAME_CLOCK whenever GAME_CLOCK<=24.
+  - Dropping the remaining rows (2013/128069; 1.6% of the data) .
+
+- We clipped negative touch times to 0.
