@@ -2,7 +2,6 @@
 * RUN Imports and config
 
 #+begin_src jupyter-python
-from timeit import default_timer as timer
 import pandas as pd
 import numpy as np
 
@@ -48,7 +47,7 @@ context: "notebook"
 
 
 #+begin_src jupyter-python
-df = pd.read_csv("./shot_logs_prepped.csv")
+df = pd.read_csv("../data/shot_logs_prepped.csv")
 print(df.columns)
 
 cluster_vars = ["SHOT_CLOCK", 
@@ -68,11 +67,12 @@ Specify a player and define player frame.
 #+begin_src jupyter-python
 player_name = "stephen curry"
 pf = df[df.player_name == player_name]
-player_name, "Number of shots: {}".format(pf.shape[0])
+print(f"Player: {player_name.title()}\n", f"Number of shots: {pf.shape[0]}")
 #+end_src
 
 #+RESULTS:
-| stephen curry | Number of shots: 909 |
+: Player: Stephen Curry
+:  Number of shots: 965
 
 ** PCA to compare dribbles and touch time
 Dribbles and touch time are definitely correlated, but we would like
@@ -85,8 +85,8 @@ pca.get_covariance()
 #+end_src
 
 #+RESULTS:
-: array([[18.16664001, 14.0741078 ],
-:        [14.0741078 , 11.95500068]])
+: array([[17.79588932, 13.79556748],
+:        [13.79556748, 11.72825634]])
 
 ** RUN Standardize pf
 
@@ -95,28 +95,15 @@ stzd_cluster_vars = pd.DataFrame(preprocessing.scale(pf[cluster_vars]),
                                  columns=cluster_vars, index=pf.index)
 d = dict([[c, stzd_cluster_vars[c]] for c in cluster_vars])
 pf_stzd = pf.assign(**d)
-pf_stzd[cluster_vars].describe()
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-|       | SHOT_CLOCK    | DRIBBLES      | TOUCH_TIME    | SHOT_DIST     |
-|-------+---------------+---------------+---------------+---------------|
-| count | 9.090000e+02  | 9.090000e+02  | 9.090000e+02  | 9.090000e+02  |
-| mean  | -3.439371e-16 | 2.345026e-17  | -9.380102e-17 | -4.690051e-17 |
-| std   | 1.000551e+00  | 1.000551e+00  | 1.000551e+00  | 1.000551e+00  |
-| min   | -2.745191e+00 | -8.798527e-01 | -1.139299e+00 | -1.857486e+00 |
-| 25%   | -6.709922e-01 | -8.798527e-01 | -8.499220e-01 | -1.059591e+00 |
-| 50%   | 2.486998e-01  | -1.756090e-01 | -2.711677e-01 | 4.822888e-01  |
-| 75%   | 7.574656e-01  | 5.286347e-01  | 5.390883e-01  | 8.165424e-01  |
-| max   | 1.814133e+00  | 4.519349e+00  | 4.908683e+00  | 2.735805e+00  |
-:END:
 
 * Cluster
 ** k-Means
 *** Validclust 
 
-NOTE: I don't trust this package. Also can't control seed?
+NOTE: I don't trust this package. Also: can't control seed?
 
 NOTE: I got a FutureWarning saying calinski_harabaz_score will be
 renamed to calinski_harabasz_score. I fixed this with an easy replace
@@ -145,17 +132,17 @@ print(vclust._normalize().to_string())
 :RESULTS:
 :                               2         3         4         5         6         7
 : method       index                                                               
-: hierarchical calinski  0.612662  0.777679  0.875136  0.912165  1.000000  0.997465
-:              dunn      1.000000  0.924717  0.439034  0.512959  0.512959  0.512959
-:              davies    1.000000 -0.908907 -0.467309 -0.129870  0.203445  0.496486
-: kmeans       calinski  0.814508  0.805755  0.905987  0.936922  0.982922  1.000000
-:              dunn      0.861402  1.000000  0.772821  0.474064  0.471942  0.580961
-:              davies   -1.905179 -1.211824 -0.140588  0.316396  0.591464  1.000000
+: hierarchical calinski  0.850061  0.827757  0.825549  0.939317  0.953766  1.000000
+:              dunn      0.760976  0.760976  0.972336  0.846028  0.846028  1.000000
+:              davies   -1.000000 -0.721137 -0.416103 -0.113158  0.100436  0.241307
+: kmeans       calinski  0.833388  0.818177  0.911861  0.948331  0.995315  1.000000
+:              dunn      0.930504  0.764770  1.000000  0.467424  0.356706  0.673853
+:              davies   -1.000000 -0.548309 -0.078869  0.098479  0.324365  0.456802
 [[file:cluster_validation_heatmap.png]]
 :END:
 
 
-From documentation: Note that, because the scores are normalized along
+From documentation: note that, because the scores are normalized along
 each method/index pair, you should compare the colors of the cells in
 the heatmap only within a given row.
 
@@ -175,20 +162,20 @@ DB_comp
 
 #+RESULTS:
 :RESULTS:
-|     | DB\_SCORE   |
-|-----+-------------|
-| 2   | 1.281614    |
-| 3   | 1.160041    |
-| 4   | 1.020781    |
-| 5   | 0.974391    |
-| 6   | 0.904827    |
-| 7   | 0.863795    |
+|   | DB_SCORE |
+|---+----------|
+| 2 | 1.270709 |
+| 3 | 1.148432 |
+| 4 | 1.021171 |
+| 5 | 0.974754 |
+| 6 | 0.915406 |
+| 7 | 0.870258 |
 :END:
 
 *** Silhouette analysis
    
-This is derived from the code [[https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html][here]] in the sklearn documentation.
-#+begin_src jupyter-python :file silhouettes.png
+This is derived from the code [[https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html][here]] in the sklearn documentation. It produces silhouette plots, which give a finer-grained approach to model selection than simple use of average silhouette score.
+#+begin_src jupyter-python
 X = pf_stzd[cluster_vars]
 
 range_n_clusters = range(2,8)
@@ -266,33 +253,29 @@ for n_clusters in range_n_clusters:
 
 #+RESULTS:
 :RESULTS:
-: For n_clusters = 2 The average silhouette_score is : 0.39153647117350043
-: For n_clusters = 3 The average silhouette_score is : 0.36610534469733913
-: For n_clusters = 4 The average silhouette_score is : 0.33602030682191886
-: For n_clusters = 5 The average silhouette_score is : 0.3296101201101254
-: For n_clusters = 6 The average silhouette_score is : 0.34002165238670157
-: For n_clusters = 7 The average silhouette_score is : 0.3455401692536718
-[[file:silhouettes.png]]
+: For n_clusters = 2 The average silhouette_score is : 0.32401213227528014
+: For n_clusters = 3 The average silhouette_score is : 0.33157612295300487
+: For n_clusters = 4 The average silhouette_score is : 0.34173652888379913
+: For n_clusters = 5 The average silhouette_score is : 0.3381908062752307
+: For n_clusters = 6 The average silhouette_score is : 0.35970738857231094
+: For n_clusters = 7 The average silhouette_score is : 0.3758830782406466
+[[file:./.ob-jupyter/c3cb8fc2d25a95c7efb8a624dd23ecb5bc48203f.png]]
 :END:
-
-Guideline from the authors Kaufman-Rousseeuw on interpretation:
-[[./silhouette-interpretation.png]]
-
-#+RESULTS:
 *** Calinski-Harabasz score
 
 Out of curiosity, I look at how much the C-H score changes depending
 on whether we use the standardized vs the unstandardized data.
 #+begin_src jupyter-python
 rows = []
+CH_score = metrics.calinski_harabasz_score
 for k in range(2,8):
     kmeans = KMeans(n_clusters = k, random_state=1).fit(pf_stzd[cluster_vars])
     
     pf_cl = pf.assign(CLUSTER=kmeans.labels_)
-    score = metrics.calinski_harabasz_score(pf_cl[cluster_vars], pf_cl.CLUSTER)
+    score = CH_score(pf_cl[cluster_vars], pf_cl.CLUSTER)
 
     pf_stzd = pf_stzd.assign(CLUSTER=kmeans.labels_)
-    score_stzd = metrics.calinski_harabasz_score(pf_stzd[cluster_vars], pf_stzd.CLUSTER)
+    score_stzd = CH_score(pf_stzd[cluster_vars], pf_stzd.CLUSTER)
 
     rows += [[score, score_stzd]]
 
@@ -303,22 +286,15 @@ CH_comp
 
 #+RESULTS:
 :RESULTS:
-|     | unstandardized   | standardized   |
-|-----+------------------+----------------|
-| 2   | 174.327787       | 429.630845     |
-| 3   | 607.753136       | 424.855431     |
-| 4   | 603.536895       | 477.883420     |
-| 5   | 418.282459       | 494.345875     |
-| 6   | 556.100505       | 517.853275     |
-| 7   | 582.737022       | 526.494016     |
+|   | unstandardized | standardized |
+|---+----------------+--------------|
+| 2 | 186.542309     | 461.480369   |
+| 3 | 643.198937     | 453.057254   |
+| 4 | 646.428730     | 504.931150   |
+| 5 | 442.413149     | 525.095129   |
+| 6 | 583.788271     | 551.183841   |
+| 7 | 594.776273     | 554.876103   |
 :END:
-
-#+begin_src jupyter-python
-# k = CH_comp.standardized.idxmax()
-#+end_src
-
-#+RESULTS:
-: 7
 
 *** RUN k-means
 
@@ -344,7 +320,7 @@ clustering = KMeans(n_clusters = k, random_state=1).fit(pf_stzd[cluster_vars])
 #+end_src
 
  #+RESULTS:
- : Number of wins:   710
+ : Number of wins:   766
  : Number of losses: 199
 
 ** DBSCAN
@@ -372,17 +348,18 @@ print(results.sort_values("score", ascending=False).head(10))
 #+begin_example
       num. clusters     score
 eps                          
-0.83            3.0  0.315511
-0.81            3.0  0.314904
-0.79            3.0  0.314904
-0.77            3.0  0.313713
-0.75            4.0  0.186831
-0.73            4.0  0.186539
-0.71            4.0  0.183922
-0.69            4.0  0.183922
-0.61            3.0  0.183831
-0.59            3.0  0.181972
+0.83            3.0  0.312761
+0.81            3.0  0.311319
+0.79            3.0  0.311319
+0.63            3.0  0.186968
+0.73            4.0  0.185146
+0.61            3.0  0.184687
+0.71            4.0  0.183967
+0.59            3.0  0.182917
+0.57            3.0  0.181090
+0.55            3.0  0.179085
 #+end_example
+
 *** cluster 
 #+begin_src jupyter-python
 eps = results.score.idxmax()
@@ -394,29 +371,28 @@ if num_clusters > 1:
     pf_cl = pf.assign(CLUSTER=db.labels_)
     score = metrics.silhouette_score(pf_cl[cluster_vars], 
                                          pf_cl.CLUSTER)
-pf_cl
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-|         | GAME\_ID   | W     | SHOT\_CLOCK   | GAME\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   | player\_name    | CLUSTER   |
-|---------+------------+-------+---------------+---------------+------------+---------------+--------------+-----------------+-----------|
-| 14070   | 21400886   | L     | 15.4          | 376           | 0          | 0.5           | 23.2         | stephen curry   | 0         |
-| 14071   | 21400886   | L     | 16.2          | 323           | 11         | 8.3           | 15.6         | stephen curry   | 0         |
-| 14072   | 21400886   | L     | 18.2          | 314           | 0          | 0.8           | 23.1         | stephen curry   | 0         |
-| 14073   | 21400886   | L     | 12.1          | 552           | 0          | 1.5           | 24.6         | stephen curry   | 0         |
-| 14074   | 21400886   | L     | 19.4          | 126           | 4          | 4.6           | 25.7         | stephen curry   | 0         |
-| ...     | ...        | ...   | ...           | ...           | ...        | ...           | ...          | ...             | ...       |
-| 15017   | 21400014   | W     | 19.7          | 361           | 7          | 5.1           | 3.2          | stephen curry   | 0         |
-| 15018   | 21400014   | W     | 3.1           | 210           | 12         | 8.7           | 6.5          | stephen curry   | -1        |
-| 15019   | 21400014   | W     | 3.7           | 135           | 4          | 4.8           | 23.4         | stephen curry   | 0         |
-| 15020   | 21400014   | W     | 3.3           | 93            | 0          | 0.6           | 25.0         | stephen curry   | 0         |
-| 15021   | 21400014   | W     | 12.2          | 34            | 15         | 12.3          | 25.6         | stephen curry   | 0         |
+|       | GAME_ID  | W   | SHOT_CLOCK | GAME_CLOCK | DRIBBLES | TOUCH_TIME | SHOT_DIST | player_name   | CLUSTER |
+|-------+----------+-----+------------+------------+----------+------------+-----------+---------------+---------|
+| 13559 | 21400907 | W   | 16.3       | 589        | 2        | 4.0        | 8.0       | stephen curry | 0       |
+| 13560 | 21400907 | W   | 16.6       | 446        | 0        | 2.4        | 25.9      | stephen curry | 0       |
+| 13561 | 21400907 | W   | 11.0       | 334        | 0        | 0.9        | 23.8      | stephen curry | 0       |
+| 13562 | 21400907 | W   | 18.5       | 300        | 2        | 3.4        | 27.5      | stephen curry | 0       |
+| 13563 | 21400907 | W   | 3.0        | 11         | 1        | 1.5        | 25.1      | stephen curry | 0       |
+| ...   | ...      | ... | ...        | ...        | ...      | ...        | ...       | ...           | ...     |
+| 14519 | 21400014 | W   | 19.7       | 361        | 7        | 5.1        | 3.2       | stephen curry | 0       |
+| 14520 | 21400014 | W   | 3.1        | 210        | 12       | 8.7        | 6.5       | stephen curry | -1      |
+| 14521 | 21400014 | W   | 3.7        | 135        | 4        | 4.8        | 23.4      | stephen curry | 0       |
+| 14522 | 21400014 | W   | 3.3        | 93         | 0        | 0.6        | 25.0      | stephen curry | 0       |
+| 14523 | 21400014 | W   | 12.2       | 34         | 15       | 12.3       | 25.6      | stephen curry | 0       |
 
-909 rows × 9 columns
+965 rows × 9 columns
 :END:
 
-Separate wins and losses
+Separate wins and losses:
 #+begin_src jupyter-python
 pfwins_cl = pf_cl[pf_cl.W=="W"]
 pflosses_cl = pf_cl[pf_cl.W=="L"]
@@ -426,10 +402,8 @@ print("Number of wins:   {}\nNumber of losses: {}"
 #+end_src
 
 #+RESULTS:
-: Number of wins:   710
+: Number of wins:   766
 : Number of losses: 199
-** TODO Gaussian mixtures
-** TODO N2D?
 
 * Plot clusters
 ** Set up global axis specification functions
@@ -455,7 +429,7 @@ cluster_var_lims
 | -1.0 | 25.0 |
 |   -1 |   33 |
 | -1.0 | 25.9 |
-| -1.0 | 47.7 |
+| -1.0 | 48.2 |
 
 Now we will get x limits and y limits that will worth for every
 possible pairgrid.
@@ -514,10 +488,10 @@ cluster_var_lims
 #+end_src
 
 #+RESULTS:
-| -0.30000000000000004 | 25.0 |
-|                   -1 |   24 |
-|                 -1.0 | 21.9 |
-|                 -0.9 | 43.7 |
+| -0.9 | 25.0 |
+|   -1 |   24 |
+| -1.0 | 21.9 |
+| -0.9 | 43.7 |
 
 Now we will get x limits and y limits that will work for every
 possible pairgrid.
@@ -629,25 +603,15 @@ g._legend.set_bbox_to_anchor((0.9, 0.7))
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
-:   warnings.warn(msg, UserWarning)
-: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
-:   warnings.warn(msg, UserWarning)
-: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
-:   warnings.warn(msg, UserWarning)
-: /home/cody/anaconda3/lib/python3.7/site-packages/seaborn/distributions.py:283: UserWarning: Data must have variance to compute a kernel density estimate.
-:   warnings.warn(msg, UserWarning)
 [[file:l.png]]
-:END:
+
 
 ** Plot just one cluster
 
 #+begin_src jupyter-python :results none
-i = 4
-pf_cl_single = pf_cl[pf_cl.CLUSTER==i]
+i = 0
+pf_cl_single = pf_cl[pf_cl.CLUSTER==0]
 #+end_src
-
 
 #+begin_src jupyter-python :file one-cluster-win-or-loss.png
 plot_df = pf_cl_single[cluster_vars+["W"]]
@@ -671,15 +635,11 @@ g._legend.set_bbox_to_anchor((0.9, 0.7))
 #+RESULTS:
 [[file:one-cluster-win-or-loss.png]]
 
-**
 
 * Compare clusters
-** TODO Could do player-by-player outlier analysis here.
-** TODO compare within-cluster mean with bootstrap
+** Compare within-cluster mean with bootstrap
 
-NOTE: should I do this on standardized variables? Should it matter?
-
-This is _very_ quick-and-dirty.
+This is _very_ quick-and-dirty. I ended up abandoning this approach to focus on using permutations.
 
 #+begin_src jupyter-python
 i=0
@@ -724,101 +684,40 @@ def loc_bs_cluster(i, B):
 
 #+RESULTS:
 
-
 #+begin_src jupyter-python
-from scipy.stats import f as cts_rv
-cts_rv(bs_ds)
-#+end_src
+%%time
 
-#+RESULTS:
-:RESULTS:
-# [goto error]
-#+begin_example
-
-TypeErrorTraceback (most recent call last)
-<ipython-input-63-2665b8823450> in <module>
-      1 from scipy.stats import f as cts_rv
-----> 2 cts_rv(bs_ds)
-
-~/anaconda3/lib/python3.7/site-packages/scipy/stats/_distn_infrastructure.py in __call__(self, *args, **kwds)
-    769 
-    770     def __call__(self, *args, **kwds):
---> 771         return self.freeze(*args, **kwds)
-    772     __call__.__doc__ = freeze.__doc__
-    773 
-
-~/anaconda3/lib/python3.7/site-packages/scipy/stats/_distn_infrastructure.py in freeze(self, *args, **kwds)
-    766 
-    767         """
---> 768         return rv_frozen(self, *args, **kwds)
-    769 
-    770     def __call__(self, *args, **kwds):
-
-~/anaconda3/lib/python3.7/site-packages/scipy/stats/_distn_infrastructure.py in __init__(self, dist, *args, **kwds)
-    428         self.dist = dist.__class__(**dist._updated_ctor_param())
-    429 
---> 430         shapes, _, _ = self.dist._parse_args(*args, **kwds)
-    431         self.dist._argcheck(*shapes)
-    432         self.a, self.b = self.dist._get_support(*shapes)
-
-TypeError: _parse_args() missing 1 required positional argument: 'dfd'
-#+end_example
-:END:
-
-#+begin_src jupyter-python
 from statsmodels.distributions.empirical_distribution import ECDF
-
-t0 = timer()
 B = 1000
-for i in range(k):
+for i in pf_cl.CLUSTER.unique():
     print("Cluster: {}".format(i))
     
     test_stat, bs = loc_bs_cluster(i, B)
     mu = bs.mean()
     bs_cdf = ECDF(bs)
-
-    if mu < test_stat:
-        pval = 1 - bs_cdf(test_stat)
-    else:
-        pval = bs_cdf(test_stat)
-
+    pval = 1 - bs_cdf(test_stat)
     print("p = {}\n".format(pval))
-print("Time: {}s".format(timer()-t0))
 #+end_src
 
 #+RESULTS:
 #+begin_example
 Cluster: 0
-p = 0.0
+p = 0.616
 
 Cluster: 1
-p = 0.166
-
-Cluster: 2
-p = 0.37
+p = 0.981
 
 Cluster: 3
-p = 0.371
+p = 0.6659999999999999
 
-Time: 5.807103717001155s
+Cluster: 2
+p = 0.7969999999999999
+
+CPU times: user 6.53 s, sys: 3.16 ms, total: 6.54 s
+Wall time: 6.55 s
 #+end_example
 
-
-#+begin_src jupyter-python :file mean-diff-bs-sampling-dist.png
-sns.distplot(bs)
-#+end_src
-
-#+RESULTS:
-:RESULTS:
-: <matplotlib.axes._subplots.AxesSubplot at 0x7f81b92666d0>
-[[file:mean-diff-bs-sampling-dist.png]]
-:END:
-
-** TODO compare within-cluster mean with permutations
-
-NOTE: should I do this on standardized variables? Should it matter?
-
-This is _very_ quick-and-dirty.
+** Compare within-cluster mean with permutations
 
 #+begin_src jupyter-python
 # whether distance between means is zero.
@@ -843,11 +742,12 @@ def cluster_loc_perm(i, num_perms):
 #+RESULTS:
 
 #+begin_src jupyter-python
+%%time
+
 from statsmodels.distributions.empirical_distribution import ECDF
 
-t0 = timer()
 N = 1000
-for i in [1]: # range(k):
+for i in pf_cl.CLUSTER.unique():
     print("Cluster: {}".format(i))
     
     test_stat, perm_ds = cluster_loc_perm(i, N)
@@ -861,30 +761,44 @@ for i in [1]: # range(k):
         pval = perm_ds_cdf(test_stat)
 
     print("p = {}\n".format(pval))
-print("Time: {}s".format(timer()-t0))
 #+end_src
 
 #+RESULTS:
-: Cluster: 1
-: Test stat:9.313711626370717; mu:13.436022443691373
-: p = 0.47500000000000003
-: 
-: Time: 0.18798091700591613s
-** permutation analysis of Hotelling statistic
+#+begin_example
+Cluster: 0
+Test stat:2.2633830335566545; mu:0.8722861821674186
+p = 0.06099999999999994
+
+Cluster: 1
+Test stat:0.032315314354755806; mu:0.43619263391750335
+p = 0.018000000000000002
+
+Cluster: 3
+Test stat:1.372831372344848; mu:1.3793458755611097
+p = 0.615
+
+Cluster: 2
+Test stat:10.242451159977422; mu:12.478055726463385
+p = 0.547
+
+CPU times: user 767 ms, sys: 6 µs, total: 767 ms
+Wall time: 763 ms
+#+end_example
+
+** Permutation analysis of Hotelling statistic
 *** Scratch for one cluster
+
+
+
 #+begin_src jupyter-python
 i = 0
 wins = pfwins_cl.query("CLUSTER=={}".format(i))[cluster_vars]
 wins.to_csv("./wins.csv", index=False)
 losses = pflosses_cl.query("CLUSTER=={}".format(i))[cluster_vars]
 losses.to_csv("./losses.csv", index=False)
-
-both = np.concatenate([wins, losses])
-both.shape
 #+end_src
 
 #+RESULTS:
-| 311 | 4 |
 
 **** using org-babel embedded R
 [[https://cran.r-project.org/web/packages/Hotelling/Hotelling.pdf][Documentation for Hotelling library]].
@@ -899,8 +813,8 @@ T2 <- hotelling.stat(wins, losses)
 #+end_src
 
 #+RESULTS:
-| 0.0436613382315166 | 0.247572815533981 |   4 | 231 | 80 | 4 |
-| 0.0436613382315166 | 0.247572815533981 | 306 | 231 | 80 | 4 |
+| 8.68027805225357 | 0.247377622377622 |   4 | 223 | 65 | 4 |
+| 8.68027805225357 | 0.247377622377622 | 283 | 223 | 65 | 4 |
 
 
 Really, the output is a list where the component df is a vector of length 2.
@@ -910,7 +824,7 @@ T2$df
 
 #+RESULTS:
 |   4 |
-| 306 |
+| 283 |
 
 This is what we're after.
 
@@ -919,9 +833,8 @@ T2$statistic
 #+end_src
 
 #+RESULTS:
-: 0.0436613382315166
-I get the same below using rpy2:
-| 0.043661338231516564 |
+: 8.68027805225357
+Check below that I get the same below using rpy2.
 
 **** using rpy2
 #+begin_src jupyter-python
@@ -931,7 +844,6 @@ from rpy2.robjects import pandas2ri
 from rpy2.robjects.conversion import localconverter
 #+end_src
 
-#+RESULTS:
 
 #+begin_src jupyter-python
 with localconverter(ro.default_converter + pandas2ri.converter):
@@ -942,18 +854,18 @@ r_losses
 
 #+RESULTS:
 :RESULTS:
-R/rpy2 DataFrame (80 x 4)
-| SHOT\_CLOCK   | DRIBBLES   | TOUCH\_TIME   | SHOT\_DIST   |
-|---------------+------------+---------------+--------------|
-| 18.200000     | 0          | 0.800000      | 23.100000    |
-| 19.400000     | 4          | 4.600000      | 25.700000    |
-| 20.000000     | 3          | 3.200000      | 27.400000    |
-| 18.800000     | 0          | 1.200000      | 23.800000    |
-| ...           | ...        | ...           | ...          |
-| 24.000000     | 2          | 1.300000      | 23.300000    |
-| 20.600000     | 0          | 1.000000      | 25.300000    |
-| 15.400000     | 3          | 2.400000      | 24.700000    |
-| 18.400000     | 6          | 6.300000      | 21.700000    |
+R/rpy2 DataFrame (65 x 4)
+| SHOT_CLOCK | DRIBBLES | TOUCH_TIME | SHOT_DIST |
+|------------+----------+------------+-----------|
+| 8.000000   | 3        | 5.200000   | 9.300000  |
+| 18.700000  | 7        | 5.200000   | 4.200000  |
+| 12.000000  | 3        | 4.500000   | 6.200000  |
+| 17.600000  | 8        | 6.900000   | 8.500000  |
+| ...        | ...      | ...        | ...       |
+| 22.900000  | 1        | 1.800000   | 0.600000  |
+| 18.200000  | 3        | 4.100000   | 3.900000  |
+| 15.100000  | 4        | 3.000000   | 11.300000 |
+| 16.600000  | 3        | 3.000000   | 3.300000  |
 :END:
 
 #+begin_src jupyter-python
@@ -972,18 +884,18 @@ r_stat
 #+RESULTS:
 :RESULTS:
 ListVector with 6 elements.
-| statistic   | FloatVector with 1 elements.    |
-|             | | 0.043661   |                  |
-| m           | FloatVector with 1 elements.    |
-|             | | 0.247573   |                  |
-| df          | FloatVector with 2 elements.    |
-|             | | 4.000000   | 306.000000   |   |
-| nx          | IntVector with 1 elements.      |
-|             | | 231   |                       |
-| ny          | IntVector with 1 elements.      |
-|             | | 80   |                        |
-| p           | IntVector with 1 elements.      |
-|             | | 4   |                         |
+| statistic | FloatVector with 1 elements. |
+|           | | 8.680278 |                 |
+| m         | FloatVector with 1 elements. |
+|           | | 0.247378 |                 |
+| df        | FloatVector with 2 elements. |
+|           | | 4.000000 | 283.000000 |    |
+| nx        | IntVector with 1 elements.   |
+|           | | 223 |                      |
+| ny        | IntVector with 1 elements.   |
+|           | | 65 |                       |
+| p         | IntVector with 1 elements.   |
+|           | | 4 |                        |
 :END:
 
 #+begin_src jupyter-python
@@ -992,7 +904,7 @@ list(x)
 #+end_src
 
 #+RESULTS:
-| 0.043661338231516564 |
+| 8.680278052253561 |
 
 *** permutations for one cluster using rpy2
 Now make a function and hope the overhead of converting many times is acceptable.
@@ -1042,19 +954,19 @@ vir_wins
 :RESULTS:
 |     | 0    | 1   | 2   | 3    |
 |-----+------+-----+-----+------|
-| 0   | 19.4 | 0.0 | 1.7 | 27.8 |
-| 1   | 17.6 | 0.0 | 0.8 | 24.1 |
-| 2   | 18.3 | 6.0 | 6.2 | 24.5 |
-| 3   | 20.0 | 5.0 | 4.1 | 24.3 |
-| 4   | 14.5 | 2.0 | 2.0 | 19.1 |
+| 0   | 11.2 | 2.0 | 1.9 | 7.8  |
+| 1   | 19.2 | 6.0 | 5.1 | 8.6  |
+| 2   | 12.9 | 1.0 | 0.8 | 7.3  |
+| 3   | 14.6 | 2.0 | 3.9 | 2.3  |
+| 4   | 21.0 | 1.0 | 1.7 | 2.2  |
 | ... | ...  | ... | ... | ...  |
-| 226 | 18.0 | 6.0 | 5.8 | 17.8 |
-| 227 | 21.2 | 0.0 | 0.7 | 25.7 |
-| 228 | 18.3 | 5.0 | 5.7 | 19.5 |
-| 229 | 18.4 | 6.0 | 6.3 | 21.7 |
-| 230 | 17.5 | 2.0 | 2.0 | 24.5 |
+| 218 | 16.9 | 8.0 | 6.7 | 14.8 |
+| 219 | 16.7 | 6.0 | 3.5 | 5.9  |
+| 220 | 21.5 | 3.0 | 4.0 | 3.2  |
+| 221 | 23.3 | 0.0 | 0.9 | 7.6  |
+| 222 | 14.8 | 1.0 | 1.2 | 1.0  |
 
-231 rows × 4 columns
+223 rows × 4 columns
 :END:
 
 #+begin_src jupyter-python
@@ -1077,103 +989,60 @@ def simulate_T2(i, num_perms):
 #+RESULTS:
 
 #+begin_src jupyter-python
-t0 = timer()
+%%time
 test_stat, sample = simulate_T2(i, 1000)
-print("Time: {}".format(timer()-t0))
 #+end_src
 
 #+RESULTS:
-: Time: 4.118334772007074
+: CPU times: user 3.93 s, sys: 9.7 ms, total: 3.94 s
+: Wall time: 3.95 s
+
 
 #+begin_src jupyter-python
-test_stat, sample
-#+end_src
-
-#+RESULTS:
-| 0.04366133823151655 | 0 | 0.462838 | 1 | 4.239804 | 2 | 8.146991 | 3 | 8.431266 | 4 | 1.774252 | ... | 995 | 3.030511 | 996 | 4.269614 | 997 | 3.27482 | 998 | 13.344696 | 999 | 1.925045 | Length: | 1000 | dtype: | float64 |
-
-#+begin_src jupyter-python
+%%time
 from statsmodels.distributions.empirical_distribution import ECDF
 
-t0 = timer()
 num_perms = 1000
-for i in range(k):
+for i in pf_cl.CLUSTER.unique():
     print("Cluster: {}".format(i))
     
     test_stat, sample = simulate_T2(i, num_perms)
     mu = sample.mean()
     sample_cdf = ECDF(sample)
-
-    if mu < test_stat:
-        pval = 1 - sample_cdf(test_stat)
-    else:
-        pval = sample_cdf(test_stat)
+    pval = 1 - sample_cdf(test_stat)
 
     print("p = {}\n".format(pval))
-print("Time: {}s".format(timer()-t0))
 #+end_src
 
 #+RESULTS:
 #+begin_example
 Cluster: 0
-p = 0.0
+p = 0.06799999999999995
 
 Cluster: 1
-p = 0.357
-
-Cluster: 2
-p = 0.061999999999999944
+p = 0.99
 
 Cluster: 3
-p = 0.33399999999999996
+p = 0.548
 
-Time: 15.029873986990424s
+Cluster: 2
+p = 0.361
+
+CPU times: user 15.2 s, sys: 72.8 ms, total: 15.2 s
+Wall time: 15.3 s
 #+end_example
 
+
 #+begin_src jupyter-python :file sample.png
-sns.distplot(sample)
+print(f"Test statistic: {test_stat}")
+_ = sns.distplot(sample)
 #+end_src
 
 #+RESULTS:
 :RESULTS:
-: <matplotlib.axes._subplots.AxesSubplot at 0x7fbd64256fd0>
+: Test statistic: 4.54766581689085
 [[file:sample.png]]
 :END:
-
-#+begin_src jupyter-python :file sample.png
-test_stat
-#+end_src
-
-#+RESULTS:
-: 0.043661338231516564
-
-#+begin_src R :session
-require(Hmisc)
-require(binom)
-#+end_src
-
-#+RESULTS:
-: TRUE
-
-#+begin_src R :session
-set.seed(0)
-p <- runif(1,0,1)
-X <- sample(c(0,1), size = 100, replace = TRUE, prob = c(1-p, p))
-library(Hmisc)
-binconf(sum(X), length(X), alpha = 0.05, method = 'exact')
-## library(binom)
-## binom.confint(sum(X), length(X), conf.level = 0.95, method = 'all')
-#+end_src
-
-#+RESULTS:
-| 0.93 | 0.861080271544143 | 0.971394711092561 |
-
-#+begin_src R :session
-length(X)
-#+end_src
-
-#+RESULTS:
-: 100
 
 ** 1-dimensional t-test in each coordinate
 
@@ -1200,9 +1069,9 @@ for cl in cl_labels:
 
 #+RESULTS:
 : cluster: 0
+: Var: DRIBBLES; p=0.0059611983296662535
+: Var: TOUCH_TIME; p=0.0026774338219587657
 : cluster: 1
 : cluster: 2
-: Var: DRIBBLES; p=0.0061715962024508865
-: Var: TOUCH_TIME; p=0.0025996451321545237
 : cluster: 3
 
