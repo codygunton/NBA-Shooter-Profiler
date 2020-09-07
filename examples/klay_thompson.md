@@ -1,6 +1,6 @@
 # Player: Klay Thompson
 
-We analyze Klay Thompsons's shots. We dropped the variable DRIBBLES, partially out of a desire for simplicity, and partially because DRIBBLES is generally a more discriminative feature for centers and other players who spend more time close to the basket.
+We analyze Klay Thompsons's shots. We drop the variable DRIBBLES, partially out of a desire for simplicity, and partially because DRIBBLES is generally a more discriminative feature for centers and other players who spend more time close to the basket.
 
 ## k-Means Clustering and Visualization
 
@@ -37,7 +37,7 @@ We analyze Klay Thompsons's shots. We dropped the variable DRIBBLES, partially o
 
 
 We give a verbal description of the clusters.
-  - Cluster 0: two-pointers taken earlier the possession after Klay had handled the ball for less than 5 seconds.
+  - Cluster 0: two-pointers taken early in the possession after Klay had handled the ball for less than 5 seconds.
   - Cluster 1: longer-range shots (mostly three-pointers) taken later in the possession (i.e., with less time on the shot clock).
   - Cluster 2: shorter-range shots taken earlier in the possession.
   - Cluster 3: shots taken earlier in the possession, where Klay had handled the ball for a longer period of time (it is likely that he initiated the possession, possibly by getting a rebound).
