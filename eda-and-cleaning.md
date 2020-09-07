@@ -679,7 +679,7 @@ We show the correlations between all of the relevant (dropping numerical ID's) v
     
     _ = sns.heatmap(ddf.corr(), cmap="YlGnBu")
 
-![img](../images/correlations-heatmap.png)
+![img](images/correlations-heatmap.png)
 
 We see a number of expected correlations. For example: 
 
@@ -699,12 +699,12 @@ are less strongly correlated. E.g., Anthony Davis in losses, Tyson Chandler in w
     pname = "stephen curry"
     _ = plot_player_heatmap(pname)
 
-![img](../images/stephen-curry-correlations-heatmap.png)
+![img](images/stephen-curry-correlations-heatmap.png)
 
     pname = "deandre jordan"
     _ = plot_player_heatmap(pname)
 
-![img](../images/deandre-jordan-correlations-heatmap.png)
+![img](images/deandre-jordan-correlations-heatmap.png)
 
 
 <a id="org310f67c"></a>
@@ -748,11 +748,11 @@ We compare James Harden, a player who frequently handles the ball for a long tim
         plt.title(title_string)
     compare_dribbles(players, norm_hist=False)
 
-![img](../images/harden-ingles-overlap.png)
+![img](images/harden-ingles-overlap.png)
 
     compare_dribbles(players, norm_hist=True)
 
-![img](../images/harden-ingles-overlap-normalized.png)
+![img](images/harden-ingles-overlap-normalized.png)
 
 
 <a id="org887c896"></a>
