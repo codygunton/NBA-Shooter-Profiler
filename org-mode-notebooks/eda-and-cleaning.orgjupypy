@@ -1,5 +1,9 @@
 #+TODO: TODO | RUN
+
 * Imports
+  :PROPERTIES:
+  :header-args:jupyter-python: :exports both :eval never-export
+  :END:
 
 #+begin_src jupyter-python :results none
 import numpy as np
@@ -56,6 +60,9 @@ df
 :END:
 
 * EDA
+  :PROPERTIES:
+  :header-args:jupyter-python: :exports both :eval never-export
+  :END:
 ** How many games did each team play?
 
 The GAME_ID is formatted in one of two ways, depending ont the value of LOCATION:
@@ -68,13 +75,13 @@ We find of the distinct values GAME_ID and record the corresponding matchup.
 
 #+begin_src jupyter-python
 # The away team takes a shot in every game, 
-so we can throw out half of the entries.
+# so we can throw out half of the entries.
 ddf = df[df.LOCATION=="A"]
 ddf = ddf.assign(AWAY_TEAM=lambda ddf: ddf.MATCHUP.apply(lambda s: s[-9:-6]))
 ddf = ddf.assign(HOME_TEAM=lambda ddf: ddf.MATCHUP.apply(lambda s: s[-3:]))
 ddf = ddf[["GAME_ID", "AWAY_TEAM", "HOME_TEAM"]].drop_duplicates()
 print(ddf)
-print(f"Compare with df.GAME_ID.nunique() = {df.GAME_ID.nunique()}").
+print(f"Compare with df.GAME_ID.nunique() = {df.GAME_ID.nunique()}.")
 #+end_src
 
 #+RESULTS:
@@ -93,7 +100,7 @@ print(f"Compare with df.GAME_ID.nunique() = {df.GAME_ID.nunique()}").
 124994  21400320       BKN       CHI
 
 [904 rows x 3 columns]
-Cf with df.GAME_ID.nunique() = 904
+Compare with df.GAME_ID.nunique() = 904.
 #+end_example
 
 Many games are missing. There are 82*30/2 = 1230 games in the regular season.
@@ -145,10 +152,10 @@ dates.sort_values(by="MATCHUP").reset_index(drop=True)
 
 ** Correlations
 
-We show the correlations between all of the revalant (dropping numerical ID's) variables across the entire dataset.
+We show the correlations between all of the relevant (dropping numerical ID's) variables across the entire dataset.
 
 
-#+begin_src jupyter-python :file ../images/correlations-heatmap.png
+#+begin_src jupyter-python :file ../images/correlations-heatmap.png :results output
 drop_vars = ['GAME_ID', 'MATCHUP', 'LOCATION', 'W', 
              'FINAL_MARGIN', 'CLOSEST_DEFENDER', 
              'CLOSEST_DEFENDER_PLAYER_ID', 
@@ -169,7 +176,7 @@ For players near the basket (at least), it can happen that DRIBBLES and TOUCH_TI
 are less strongly correlated. E.g., Anthony Davis in losses, Tyson Chandler in wins.
 
 
-#+begin_src jupyter-python :file ../images/stephen-curry-correlations-heatmap.png
+#+begin_src jupyter-python :file ../images/stephen-curry-correlations-heatmap.png :results output
 def plot_player_heatmap(pname):
     ddf = df[(df.player_name==pname)]
     ddf =ddf.drop(drop_vars, axis=1)
@@ -178,23 +185,20 @@ def plot_player_heatmap(pname):
     return g
 
 pname = "stephen curry"
-plot_player_heatmap(pname)
+_ = plot_player_heatmap(pname)
 #+end_src
 
 #+RESULTS:
-:RESULTS:
-: <matplotlib.axes._subplots.AxesSubplot at 0x7fbfabd3bc10>
 [[file:../images/stephen-curry-correlations-heatmap.png]]
-:END:
 
 
-#+begin_src jupyter-python :file ../images/deandre-jordan-correlations-heatmap.png
+#+begin_src jupyter-python :file ../images/deandre-jordan-correlations-heatmap.png :results output
 pname = "deandre jordan"
-plot_player_heatmap(pname)
+_ = plot_player_heatmap(pname)
 #+end_src
 
 #+RESULTS:
-[[file:../images/davis-correlations-heatmap.png]]
+[[file:../images/deandre-jordan-correlations-heatmap.png]]
 
 ** Simple profile: dribbles before shots
 
@@ -217,7 +221,7 @@ players = ["james harden", "joe ingles"]
 #+end_src
 
 
-#+begin_src jupyter-python :file ../images/harden-ingles-overlap.png
+#+begin_src jupyter-python :file ../images/harden-ingles-overlap.png :results output
 def compare_dribbles(players, norm_hist = False):
     fig, ax = plt.subplots()
 
@@ -244,7 +248,7 @@ compare_dribbles(players, norm_hist=False)
 [[file:../images/harden-ingles-overlap.png]]
 
 
-#+begin_src jupyter-python :file ../images/harden-ingles-overlap-normalized.png
+#+begin_src jupyter-python :file ../images/harden-ingles-overlap-normalized.png :results output
 compare_dribbles(players, norm_hist=True)
 #+end_src
 
@@ -252,6 +256,9 @@ compare_dribbles(players, norm_hist=True)
 [[file:../images/harden-ingles-overlap-normalized.png]]
 
 * Cleaning
+  :PROPERTIES:
+  :header-args:jupyter-python: :exports both :eval never-export
+  :END:
 *** RUN Restrict vars and inspect
 
 We will try understand how a shooter's shot selection, described in terms of a restricted set of variables, is a good predictor of a win or loss for the team. We expect that this can only be the case for players that are one of the most important players on their team.
@@ -572,6 +579,7 @@ df.to_csv("../data/shot_logs_prepped.csv", index=False)
 
 #+RESULTS:
 : Exporting a dataframe of shape (126056, 8) to csv.
+
 
 ** Summary of cleaning
 
