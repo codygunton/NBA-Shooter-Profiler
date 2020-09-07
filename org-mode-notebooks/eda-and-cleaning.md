@@ -1,21 +1,21 @@
 
 # Table of Contents
 
-1.  [Imports](#orgcdaa174)
-2.  [EDA](#org4eaf3ac)
-    1.  [How many games did each team play?](#org6c9226d)
-    2.  [Correlations](#org2f1018e)
-    3.  [Simple profile: dribbles before shots](#org8ec3428)
-3.  [Cleaning](#orgd469501)
-        1.  [Restrict vars and inspect](#orgedfa300)
-        2.  [Missing shot clock values](#org9091cce)
-        3.  [Clip touch times](#orgd3a309a)
-    1.  [Output data frame](#org4d2583e)
-    2.  [Summary of cleaning](#org34b61b3)
+1.  [Imports](#orgf12e02e)
+2.  [EDA](#org42725ec)
+    1.  [How many games did each team play?](#orga463df8)
+    2.  [Correlations](#orgdec3001)
+    3.  [Simple profile: dribbles before shots](#org78c97b8)
+3.  [Cleaning](#orgb98bf08)
+        1.  [Restrict vars and inspect](#org82c68c5)
+        2.  [Missing shot clock values](#org981e40b)
+        3.  [Clip touch times](#org666cb14)
+    1.  [Output data frame](#org55607c1)
+    2.  [Summary of cleaning](#orgc2306b6)
 
 
 
-<a id="orgcdaa174"></a>
+<a id="orgf12e02e"></a>
 
 # Imports
 
@@ -50,12 +50,12 @@ Set up seaborn
     df
 
 
-<a id="org4eaf3ac"></a>
+<a id="org42725ec"></a>
 
 # EDA
 
 
-<a id="org6c9226d"></a>
+<a id="orga463df8"></a>
 
 ## How many games did each team play?
 
@@ -94,7 +94,7 @@ Find the dates of the games played.
     dates.sort_values(by="MATCHUP").reset_index(drop=True)
 
 
-<a id="org2f1018e"></a>
+<a id="orgdec3001"></a>
 
 ## Correlations
 
@@ -130,7 +130,7 @@ are less strongly correlated. E.g., Anthony Davis in losses, Tyson Chandler in w
     _ = plot_player_heatmap(pname)
 
 
-<a id="org8ec3428"></a>
+<a id="org78c97b8"></a>
 
 ## Simple profile: dribbles before shots
 
@@ -174,12 +174,12 @@ We compare James Harden, a player who frequently handles the ball for a long tim
     compare_dribbles(players, norm_hist=True)
 
 
-<a id="orgd469501"></a>
+<a id="orgb98bf08"></a>
 
 # Cleaning
 
 
-<a id="orgedfa300"></a>
+<a id="org82c68c5"></a>
 
 ### RUN Restrict vars and inspect
 
@@ -224,7 +224,7 @@ We see that the problem of negative touch times is prevalent: it occurs in 249/9
     df_neg.DRIBBLES.value_counts()
 
 
-<a id="org9091cce"></a>
+<a id="org981e40b"></a>
 
 ### Missing shot clock values
 
@@ -316,7 +316,7 @@ We see that the problem of negative touch times is prevalent: it occurs in 249/9
         print(df.isna().any())
 
 
-<a id="orgd3a309a"></a>
+<a id="org666cb14"></a>
 
 ### RUN Clip touch times
 
@@ -332,7 +332,7 @@ The one shot with two dribbles looks like a touch time of 1 second&#x2013;the sh
     df = df.assign(TOUCH_TIME=masked_TOUCH_TIME)
 
 
-<a id="org4d2583e"></a>
+<a id="org55607c1"></a>
 
 ## Output data frame
 
@@ -340,7 +340,7 @@ The one shot with two dribbles looks like a touch time of 1 second&#x2013;the sh
     df.to_csv("../data/shot_logs_prepped.csv", index=False)
 
 
-<a id="org34b61b3"></a>
+<a id="orgc2306b6"></a>
 
 ## Summary of cleaning
 
