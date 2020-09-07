@@ -78,7 +78,7 @@ Inspecting the plot of Cluster 0, we see that, in wins, the shots tend to be tak
 
 > There is a significant difference, in wins and losses, in the type of early-clock two-pointers taken by Klay Thompson.
 
-We note right away that we have not established causality. Nonetheless, the result is intriguing and potentially useful useful in game planning. Concretely, it suggests the importance of emphasizing interior defense. This is slightly surprising, since Thompson is one of the most talented three point shooters in the history of the NBA, and his team, the Warriors, is famous for winning by emphasizing long range shooting.
+We note right away that we have not established causality. Nonetheless, the result is intriguing and potentially useful useful in game planning. Concretely, it suggests the importance of interior defense. This is slightly surprising, since Thompson is one of the most talented three point shooters in the history of the NBA, and his team, the Warriors, is famous for winning by emphasizing long range shooting
 
 
 

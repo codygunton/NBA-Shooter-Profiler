@@ -424,7 +424,7 @@ Set up seaborn
 
 ## How many games did each team play?
 
-The GAME_ID is formatted in one of two ways, depending ont the value of LOCATION:
+The GAME_ID is formatted in one of two ways, depending on the value of LOCATION:
 
 -   AWAY @ HOME if the game was a home game for the player (i.e., LOCATION=H)
 -   HOME vs. AWAY if the game was an away game for the player (i.e., LOCATION=A)
@@ -458,9 +458,7 @@ We find of the distinct values GAME_ID and record the corresponding matchup.
     [904 rows x 3 columns]
     Compare with df.GAME_ID.nunique() = 904.
 
-Many games are missing. There are 82\*30/2 = 1230 games in the regular season.
-
-Aggregate by team
+There are 82\*30/2 = 1230 games in the regular NBA season, but unly 904 and recorded in our data. We aggregate by team:
 
     # count games played by a given team with abbreviation ab
     team_abbrevs = df.MATCHUP.apply(lambda s: s[-3:]).unique()
@@ -669,7 +667,7 @@ Find the dates of the games played.
 
 ## Correlations
 
-We show the correlations between all of the relevant (dropping numerical ID's) variables across the entire dataset.
+We show the correlations between all of the relevant (dropping numerical ID's, for example) variables across the entire dataset.
 
     drop_vars = ['GAME_ID', 'MATCHUP', 'LOCATION', 'W', 
                  'FINAL_MARGIN', 'CLOSEST_DEFENDER', 
@@ -684,10 +682,9 @@ We show the correlations between all of the relevant (dropping numerical ID's) v
 We see a number of expected correlations. For example: 
 
 -   There is a weak correlation between shot distance and closest defender distance. This is because challenging a player at the basket requires closer coverage than covering a player shooting from farther out.
--   We see a strong correlation between dribbles and touch time. This is because, in  This is to be expected, since, typically, longer touch times require more dribbles from the player, and, conversely, a larger number of dribbles tends to indicate a longer touch time.
+-   We see a strong correlation between DRIBBLES and TOUCH_TIME. This is to be expected, since, typically, longer touch times require more dribbles from the player, and, conversely, a larger number of dribbles tends to indicate a longer touch time.
 
-For players near the basket (at least), it can happen that DRIBBLES and TOUCH_TIME
-are less strongly correlated. E.g., Anthony Davis in losses, Tyson Chandler in wins.
+For players who play nearer to the basket (e.g., Deandre Jordan), it can happen that DRIBBLES and TOUCH_TIME are less strongly correlated than for other players (e.g., Stephen Curry).
 
     def plot_player_heatmap(pname):
         ddf = df[(df.player_name==pname)]
@@ -716,7 +713,7 @@ A very simple characteristic of a player's shot profile is their tendency to tak
 We compare James Harden, a player who frequently handles the ball for a long time before shooting, with Joe Ingles, who is more of a catch-and-shoot player. 
 
     # Note: there is an error in the dataset: "jon ingles" is really "joe ingles"
-    # We will fix that here and again, alter, when we prepare the data for clustering.
+    # We will fix that here and again later, when we prepare the data for clustering.
     
     def jon_to_joe(name):
         if name == "jon ingles":
@@ -1061,7 +1058,7 @@ We see that the problem of negative touch times is prevalent: it occurs in 249/9
     
         1591 out of 2013 outstanding shots have a touch time of <4 seconds.
     
-    We conclude ~75% of the controversial values have a short touch time, suggesting a missed shot clock reset.
+    We conclude that ~75% of the controversial values have a short touch time, suggesting a missed shot clock reset.
 
 3.  Less conservative policy:
 
@@ -1070,7 +1067,7 @@ We see that the problem of negative touch times is prevalent: it occurs in 249/9
         -   If DRIBBLES < <span class="underline">5?</span>: assume the clock didn't reset, 
             and set SHOT_CLOCK = 24 - TOUCH_TIME.
     
-    Note: the last part of this is a bad polciy in more recent seasons, when the shot clock would only reset to 14 after an offensive rebound.
+    Note: the last part of this is a bad policy in more recent seasons, when the shot clock would only reset to 14 after an offensive rebound.
 
 4.  Most conservative policy
 
