@@ -11,11 +11,11 @@ Our tool segments X's shots into shot types by clustering, then gives a multi-sl
 
 We will use the NBA shot logs data available [here](https://www.kaggle.com/dansbecker/nba-shot-logs), which covers around the first 75% of the 2014-2015 season, and which is available locally at [shot_logs.csv](./data/shot_logs.csv). We provide several files documenting our tool.
 
- - [eda.md](eda.md) A basic overview of the data.
- - [cleaning.md](cleaning.md) A file demonstrating our cleaning of the shot logs data (TODO: Say one or two more sentences.)
- - [nba-shooter-profiler.ipynb](nba-shooter-profiler.ipynb) A Google Colab notebook performing the cluster analysis. The notebook can also be run interactively:
+ - [eda-and-cleaning.md](eda-and-cleaning.md) Basic EDA, followed by a well-documented cleaning of the data in preparation for clustering.
+ - [NBA_Shooter_Profiler.ipynb](NBA_Shooter_Profiler.ipynb) A Google Colab notebook performing the cluster analysis. The notebook can also be run interactively by those with a Google account:
  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1rNeJoEB4d4X9axz7dgKi6ebDLF1oumHN?usp=sharing).
  - Example analyses:
-   - [...](examples/...)
-   - [...](examples/...)
-   - [...](examples/...)
+   - [Klay Thompson](examples/klay_thompson.md)
+   - [Tim Duncan](examples/tim_duncan.md)
+
+![animated.gif](images/animated.gif)
